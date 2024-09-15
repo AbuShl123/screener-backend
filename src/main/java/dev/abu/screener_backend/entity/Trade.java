@@ -1,4 +1,4 @@
-package dev.abu.screener_backend.handlers;
+package dev.abu.screener_backend.entity;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -11,19 +11,19 @@ import lombok.Setter;
 @Setter
 public class Trade {
     public double price;
-    public double volume;
+    public double quantity;
     public boolean isBids;
     public double incline;
 
     @Override
     public String toString() {
-        return "[" + price + ", " + volume + ", "  + incline + ", " + isBids + "]";
+        return "[" + price + ", " + quantity + ", "  + incline + ", " + isBids + "]";
     }
 
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof Trade t) {
-            return t.price == price && t.volume == volume && t.isBids == isBids;
+            return t.price == price && t.quantity == quantity && t.isBids == isBids;
         }
         return false;
     }

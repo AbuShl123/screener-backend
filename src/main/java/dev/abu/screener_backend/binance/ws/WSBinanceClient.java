@@ -57,7 +57,6 @@ public abstract class WSBinanceClient {
     }
 
     private void attemptConnection() {
-        log.info("Connecting to a {}... ", websocketName);
         client.execute(getWebSocketHandler(), this.wsUrl);
     }
 
