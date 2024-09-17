@@ -17,82 +17,100 @@ import static java.lang.Math.abs;
 @Slf4j
 public class OrderBookDataAnalyzer {
 
-    /** Amount of largest order books to be displayed */
+    /** size of the order book - always 10 */
     private final int size;
     /** The price span to accept (in percentages) */
     private final double range;
+    /** The symbol - ticker */
+    private final Ticker symbol;
 
-    private final LinkedList<Trade> trades;
+    private final LinkedList<Trade> bids = new LinkedList<>();
+    private final LinkedList<Trade> asks = new LinkedList<>();
     private final WSBinanceTickerPriceClient priceClient;
 
-    public OrderBookDataAnalyzer(Ticker symbol, String size, String range) {
-        this.trades = new LinkedList<>();
+    public OrderBookDataAnalyzer(Ticker symbol, String range) {
+        this.symbol = symbol;
         this.priceClient = WSBinanceClients.getBinanceTickerPriceClient(symbol);
-        this.size = size == null ? 10 : Integer.parseInt(size);
+        this.size = 5;
         this.range = range == null ? 10 : Double.parseDouble(range);
         setTrades();
     }
 
     private void setTrades() {
-        for (int i = 0; i < size; i++) {
-            trades.add(new Trade());
+        for (int i = 0; i < 5; i++) {
+            bids.add(new Trade());
+            asks.add(new Trade());
         }
     }
 
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof OrderBookDataAnalyzer other) {
-            return other.size == size && other.range == range;
+            return symbol == other.symbol && other.range == range;
         }
         return false;
     }
 
     public boolean processData(String orderBookDataPayload) {
         try {
-            boolean isUpdated = false;
             ObjectMapper mapper = new ObjectMapper();
             JsonNode jsonNode = mapper.readTree(orderBookDataPayload);
-            JsonNode bidsArray = jsonNode.get("bids");
-            if (bidsArray == null) return false;
-            for (JsonNode bid : bidsArray) {
-                double price = bid.get(0).asDouble();
-                double incline = getIncline(price);
-                if (isPriceOutOfInterest(incline)) {
-                    continue;
-                }
-                double quantity = bid.get(1).asDouble();
-                boolean result = setLargest(price, quantity, incline);
-                if (result) isUpdated = true;
-            }
-            return isUpdated;
+            boolean bidsUpdate = processData(jsonNode.get("bids"), false);
+            boolean asksUpdate = processData(jsonNode.get("asks"), true);
+            return bidsUpdate || asksUpdate;
         } catch (Exception e) {
             log.error("Error reading order book payload", e);
-//            return "{ \"status\": \"ANALYZER_ERROR\"}, \"message\": \"Failed to process order book data: " + e.getMessage() + "\"";
         }
         return false;
     }
 
-    private boolean setLargest(double price, double quantity, double incline) {
-        var newTrade = new Trade(price, quantity, false, incline);
+    private boolean processData(JsonNode tradesArray, boolean isAsk) {
+        boolean result = false;
+        if (tradesArray == null) return false;
+        for (JsonNode trade : tradesArray) {
+            double price = trade.get(0).asDouble();
+            double incline = getIncline(price);
+            if (inclineIsTooBig(incline)) continue;
+            double quantity = trade.get(1).asDouble();
+            if ( setLargest(price, quantity, incline, isAsk) ) {
+                result = true;
+            }
+        }
+        return result;
+    }
+
+    private boolean setLargest(double price, double quantity, double incline, boolean isAsk) {
+        LinkedList<Trade> trades;
+        if (isAsk) {
+            trades = this.asks;
+        } else {
+            trades = this.bids;
+        }
+
+        var newTrade = new Trade(price, quantity, false, roundDown(incline));
         for (int i = 0; i < trades.size(); i++) {
             var oldTrade = trades.get(i);
             if (oldTrade.equals(newTrade)) return false;
             if (oldTrade.quantity < newTrade.quantity) {
                 trades.add(i, newTrade);
-                checkSize();
+                checkSize(trades);
                 return true;
             }
         }
         return false;
     }
 
-    private void checkSize() {
+    public String getJsonOrderBookData() {
+        return String.format("{\"b\": %s, \"a\": %s}", bids, asks);
+    }
+
+    private void checkSize(LinkedList<Trade> trades) {
         if (trades.size() > size) {
             trades.removeLast();
         }
     }
 
-    private boolean isPriceOutOfInterest(double incline) {
+    private boolean inclineIsTooBig(double incline) {
         return range != -1 && incline > range;
     }
 
@@ -105,9 +123,5 @@ public class OrderBookDataAnalyzer {
     private double roundDown(double number) {
         NumberFormat formatter = new DecimalFormat("#0.00");
         return Double.parseDouble(formatter.format(number));
-    }
-
-    public String getJsonOrderBookData() {
-        return String.format("{\"b\": %s}", trades);
     }
 }

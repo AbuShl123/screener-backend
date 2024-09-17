@@ -27,10 +27,9 @@ public class ScreenerUser {
         var symbol = getSymbol(session);
         if (symbol == null) return;
         var params = getQueryParams(session);
-        var dataSize = params.get("dataSize");
         var priceSpan = params.get("priceSpan");
         this.session = session;
-        this.analyzer = new OrderBookDataAnalyzer(symbol, dataSize, priceSpan);
+        this.analyzer = new OrderBookDataAnalyzer(symbol, priceSpan);
         this.binance = new BinanceOrderBookClient(symbol);
         executorService.submit(this::startConnection);
     }
@@ -39,9 +38,10 @@ public class ScreenerUser {
         return session.getId();
     }
 
-    public void closeConnection() {
+    public void closeConnection() throws IOException {
         connectionIsOn = false;
         executorService.shutdown();
+        this.session.close();
     }
 
     private void startConnection() {

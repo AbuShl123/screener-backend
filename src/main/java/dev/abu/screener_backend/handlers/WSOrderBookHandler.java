@@ -7,6 +7,7 @@ import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -36,7 +37,11 @@ public class WSOrderBookHandler extends TextWebSocketHandler {
     private void closeSession(WebSocketSession session) {
         for (ScreenerUser userSession : users) {
             if (userSession.getId().equals(session.getId())) {
-                userSession.closeConnection();
+                try {
+                    userSession.closeConnection();
+                } catch (IOException e) {
+                    log.error("Failure while closing Websocket session ", e);
+                }
                 users.remove(userSession);
             }
         }
