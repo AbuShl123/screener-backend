@@ -1,6 +1,5 @@
-package dev.abu.screener_backend.binance.rest;
+package dev.abu.screener_backend.binance;
 
-import dev.abu.screener_backend.binance.Ticker;
 import io.restassured.RestAssured;
 import io.restassured.specification.RequestSpecification;
 
@@ -8,7 +7,7 @@ import static io.restassured.RestAssured.given;
 
 public class BinanceOrderBookClient {
 
-    private RequestSpecification request;
+    private final RequestSpecification request;
 
     static {
         RestAssured.baseURI = "https://api.binance.com";
@@ -16,14 +15,6 @@ public class BinanceOrderBookClient {
     }
 
     public BinanceOrderBookClient(Ticker symbol) {
-        changeRequest(symbol);
-    }
-
-    public void changeRequest(Ticker symbol) {
-        setRequest(symbol);
-    }
-
-    private void setRequest(Ticker symbol) {
         this.request =
                 given()
                         .param("symbol", symbol.name())

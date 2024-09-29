@@ -9,6 +9,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Set;
 
 @Component
@@ -35,14 +36,16 @@ public class WSOrderBookHandler extends TextWebSocketHandler {
     }
 
     private void closeSession(WebSocketSession session) {
-        for (ScreenerUser userSession : users) {
+        Iterator<ScreenerUser> iterator = users.iterator();
+        while (iterator.hasNext()) {
+            ScreenerUser userSession = iterator.next();
             if (userSession.getId().equals(session.getId())) {
                 try {
                     userSession.closeConnection();
                 } catch (IOException e) {
                     log.error("Failure while closing Websocket session ", e);
                 }
-                users.remove(userSession);
+                iterator.remove();
             }
         }
     }

@@ -1,8 +1,9 @@
 package dev.abu.screener_backend.entity;
 
+import dev.abu.screener_backend.binance.BinanceClients;
 import dev.abu.screener_backend.binance.Ticker;
-import dev.abu.screener_backend.binance.rest.BinanceOrderBookClient;
-import dev.abu.screener_backend.handlers.OrderBookDataAnalyzer;
+import dev.abu.screener_backend.binance.BinanceOrderBookClient;
+import dev.abu.screener_backend.analysis.OrderBookDataAnalyzer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -30,7 +31,7 @@ public class ScreenerUser {
         var priceSpan = params.get("priceSpan");
         this.session = session;
         this.analyzer = new OrderBookDataAnalyzer(symbol, priceSpan);
-        this.binance = new BinanceOrderBookClient(symbol);
+        this.binance = BinanceClients.getBinanceOrderBookClient(symbol);
         executorService.submit(this::startConnection);
     }
 
@@ -41,7 +42,6 @@ public class ScreenerUser {
     public void closeConnection() throws IOException {
         connectionIsOn = false;
         executorService.shutdown();
-        this.session.close();
     }
 
     private void startConnection() {

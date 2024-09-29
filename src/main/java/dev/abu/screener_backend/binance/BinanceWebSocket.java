@@ -1,6 +1,5 @@
-package dev.abu.screener_backend.binance.ws;
+package dev.abu.screener_backend.binance;
 
-import dev.abu.screener_backend.binance.Ticker;
 import jakarta.websocket.ContainerProvider;
 import jakarta.websocket.WebSocketContainer;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +12,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
-public abstract class WSBinanceClient {
+public abstract class BinanceWebSocket {
 
     protected static final String BASE_URL = "wss://stream.binance.com:443/ws";
 
@@ -31,7 +30,7 @@ public abstract class WSBinanceClient {
     private final ExecutorService executor;
     /** Data analyzer to retrieve the largest order book figures */
 
-    public WSBinanceClient(String websocketName, String mapping, Ticker symbol, boolean increaseBufferSize) {
+    public BinanceWebSocket(String websocketName, String mapping, Ticker symbol, boolean increaseBufferSize) {
         this.websocketName = "Binance [" + websocketName + "] websocket";
         this.symbol = symbol;
         this.executor = Executors.newSingleThreadExecutor();

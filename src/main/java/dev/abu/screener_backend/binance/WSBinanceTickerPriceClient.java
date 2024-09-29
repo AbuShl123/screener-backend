@@ -1,8 +1,7 @@
-package dev.abu.screener_backend.binance.ws;
+package dev.abu.screener_backend.binance;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.abu.screener_backend.binance.Ticker;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.socket.CloseStatus;
@@ -12,7 +11,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 @Getter
 @Slf4j
-public class WSBinanceTickerPriceClient extends WSBinanceClient {
+public class WSBinanceTickerPriceClient extends BinanceWebSocket {
 
     private double price = 0.0;
 
