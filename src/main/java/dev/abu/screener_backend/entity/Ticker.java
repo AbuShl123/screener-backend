@@ -1,4 +1,4 @@
-package dev.abu.screener_backend.binance;
+package dev.abu.screener_backend.entity;
 
 public enum Ticker {
     BTCUSDT,

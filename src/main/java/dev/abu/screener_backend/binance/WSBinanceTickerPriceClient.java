@@ -2,6 +2,7 @@ package dev.abu.screener_backend.binance;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.abu.screener_backend.entity.Ticker;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.socket.CloseStatus;
@@ -9,9 +10,22 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @Getter
 @Slf4j
 public class WSBinanceTickerPriceClient extends BinanceWebSocket {
+
+    /** Websocket - Binance Ticker Price clients */
+    private static final Map<Ticker, WSBinanceTickerPriceClient> binanceTickerPriceClients = new HashMap<>();
+
+    public synchronized static WSBinanceTickerPriceClient getBinanceTickerPriceClient(Ticker symbol) {
+        if (!binanceTickerPriceClients.containsKey(symbol)) {
+            binanceTickerPriceClients.put(symbol, new WSBinanceTickerPriceClient(symbol));
+        }
+        return binanceTickerPriceClients.get(symbol);
+    }
 
     private double price = 0.0;
 

@@ -1,4 +1,4 @@
-package dev.abu.screener_backend.handlers;
+package dev.abu.screener_backend.binance;
 
 import dev.abu.screener_backend.entity.ScreenerUser;
 import lombok.extern.slf4j.Slf4j;

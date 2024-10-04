@@ -1,6 +1,6 @@
 package dev.abu.screener_backend.analysis;
 
-import dev.abu.screener_backend.binance.Ticker;
+import dev.abu.screener_backend.entity.Ticker;
 import smile.math.MathEx;
 
 import java.time.Duration;
@@ -17,12 +17,12 @@ public class DensityAnalyzer {
     /** frequency of density level update (in seconds). */
     private static int FREQUENCY_OF_UPDATE = 180;
 
-    public static DensityAnalyzer get(Ticker ticker) {
+    public synchronized static DensityAnalyzer getDensityAnalyzer(Ticker ticker) {
         if (analyzers.containsKey(ticker)) {
             return analyzers.get(ticker);
         } else {
             analyzers.put(ticker, new DensityAnalyzer());
-            return get(ticker);
+            return getDensityAnalyzer(ticker);
         }
     }
 

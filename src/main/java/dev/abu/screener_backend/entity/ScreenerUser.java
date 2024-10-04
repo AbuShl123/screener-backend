@@ -1,8 +1,5 @@
 package dev.abu.screener_backend.entity;
 
-import dev.abu.screener_backend.binance.BinanceClients;
-import dev.abu.screener_backend.binance.Ticker;
-import dev.abu.screener_backend.binance.BinanceOrderBookClient;
 import dev.abu.screener_backend.analysis.OrderBookDataAnalyzer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.socket.TextMessage;
@@ -15,12 +12,14 @@ import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import static dev.abu.screener_backend.binance.BinanceOrderBookClient.getOrderBook;
+
 @Slf4j
 public class ScreenerUser {
 
     private WebSocketSession session;
+    private Ticker ticker;
     private OrderBookDataAnalyzer analyzer;
-    private BinanceOrderBookClient binance;
     private boolean connectionIsOn = true;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
@@ -29,9 +28,9 @@ public class ScreenerUser {
         if (symbol == null) return;
         var params = getQueryParams(session);
         var priceSpan = params.get("priceSpan");
+        this.ticker = symbol;
         this.session = session;
         this.analyzer = new OrderBookDataAnalyzer(symbol, priceSpan);
-        this.binance = BinanceClients.getBinanceOrderBookClient(symbol);
         executorService.submit(this::startConnection);
     }
 
@@ -46,7 +45,7 @@ public class ScreenerUser {
 
     private void startConnection() {
         while (connectionIsOn) {
-            String data = binance.getData();
+            String data = getOrderBook(ticker);
             boolean isUpdated = analyzer.processData(data);
             if (isUpdated) sendUpdate();
         }

@@ -2,8 +2,7 @@ package dev.abu.screener_backend.analysis;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.abu.screener_backend.binance.Ticker;
-import dev.abu.screener_backend.binance.BinanceClients;
+import dev.abu.screener_backend.entity.Ticker;
 import dev.abu.screener_backend.binance.WSBinanceTickerPriceClient;
 import dev.abu.screener_backend.entity.Trade;
 import lombok.extern.slf4j.Slf4j;
@@ -12,6 +11,8 @@ import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.Arrays;
 
+import static dev.abu.screener_backend.analysis.DensityAnalyzer.getDensityAnalyzer;
+import static dev.abu.screener_backend.binance.WSBinanceTickerPriceClient.getBinanceTickerPriceClient;
 import static java.lang.Math.abs;
 
 @Slf4j
@@ -38,9 +39,9 @@ public class OrderBookDataAnalyzer {
 
     public OrderBookDataAnalyzer(Ticker symbol, String range) {
         this.symbol = symbol;
-        this.priceClient = BinanceClients.getBinanceTickerPriceClient(symbol);
+        this.priceClient = getBinanceTickerPriceClient(symbol);
         this.range = range == null ? 10 : Double.parseDouble(range);
-        this.densityAnalyzer = DensityAnalyzer.get(symbol);
+        this.densityAnalyzer = getDensityAnalyzer(symbol);
         setTrades();
     }
 

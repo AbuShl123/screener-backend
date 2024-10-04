@@ -1,5 +1,6 @@
 package dev.abu.screener_backend.binance;
 
+import dev.abu.screener_backend.entity.Ticker;
 import jakarta.websocket.ContainerProvider;
 import jakarta.websocket.WebSocketContainer;
 import lombok.extern.slf4j.Slf4j;
