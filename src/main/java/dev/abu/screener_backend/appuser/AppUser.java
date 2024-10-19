@@ -23,7 +23,7 @@ public class AppUser implements UserDetails {
     private String lastname;
     private String email;
     private String password;
-    private Boolean enabled = false;
+    private Boolean enabled = true;
     @Enumerated(EnumType.STRING)
     private AppUserRole userRole;
 

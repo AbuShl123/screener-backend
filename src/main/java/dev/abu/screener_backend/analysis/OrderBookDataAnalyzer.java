@@ -23,7 +23,7 @@ public class OrderBookDataAnalyzer {
     /** The price span to accept (in percentages) */
     private final double range;
     /** The symbol - ticker */
-    private final Ticker symbol;
+    private final Ticker ticker;
 
     /** Array with the largest bids */
     private final Trade[] bids = new Trade[size];
@@ -37,11 +37,11 @@ public class OrderBookDataAnalyzer {
     /** Density analyzer */
     private final DensityAnalyzer densityAnalyzer;
 
-    public OrderBookDataAnalyzer(Ticker symbol, String range) {
-        this.symbol = symbol;
-        this.priceClient = getBinanceTickerPriceClient(symbol);
+    public OrderBookDataAnalyzer(Ticker ticker, String range) {
+        this.ticker = ticker;
+        this.priceClient = getBinanceTickerPriceClient(this.ticker);
         this.range = range == null ? 10 : Double.parseDouble(range);
-        this.densityAnalyzer = getDensityAnalyzer(symbol);
+        this.densityAnalyzer = getDensityAnalyzer(this.ticker);
         setTrades();
     }
 
@@ -163,7 +163,7 @@ public class OrderBookDataAnalyzer {
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof OrderBookDataAnalyzer other) {
-            return symbol == other.symbol && other.range == range;
+            return ticker == other.ticker && other.range == range;
         }
         return false;
     }

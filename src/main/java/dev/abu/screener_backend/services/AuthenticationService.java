@@ -1,14 +1,14 @@
-package dev.abu.screener_backend.registration;
+package dev.abu.screener_backend.services;
 
 import dev.abu.screener_backend.appuser.AppUserRepository;
-import dev.abu.screener_backend.config.JwtService;
+import dev.abu.screener_backend.registration.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -21,7 +21,7 @@ public class AuthenticationService {
     private static final String EMAIL_TAKEN_ERROR = "EMAIL_TAKEN_ERROR";
 
     private final AppUserRepository repository;
-    private final BCryptPasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final EmailValidator emailValidator;
     private final AuthenticationManager authenticationManager;

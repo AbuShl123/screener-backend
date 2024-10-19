@@ -1,13 +1,12 @@
 package dev.abu.screener_backend.entity;
 
 import dev.abu.screener_backend.analysis.OrderBookDataAnalyzer;
+import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -17,20 +16,16 @@ import static dev.abu.screener_backend.binance.BinanceOrderBookClient.getOrderBo
 @Slf4j
 public class ScreenerUser {
 
-    private WebSocketSession session;
-    private Ticker ticker;
-    private OrderBookDataAnalyzer analyzer;
-    private boolean connectionIsOn = true;
+    private final WebSocketSession session;
+    private final Ticker ticker;
+    private final OrderBookDataAnalyzer analyzer;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private boolean connectionIsOn = true;
 
-    public ScreenerUser(WebSocketSession session) {
-        var symbol = getSymbol(session);
-        if (symbol == null) return;
-        var params = getQueryParams(session);
-        var priceSpan = params.get("priceSpan");
-        this.ticker = symbol;
+    public ScreenerUser(WebSocketSession session, Ticker ticker, String priceSpan) {
         this.session = session;
-        this.analyzer = new OrderBookDataAnalyzer(symbol, priceSpan);
+        this.ticker = ticker;
+        this.analyzer = new OrderBookDataAnalyzer(ticker, priceSpan);
         executorService.submit(this::startConnection);
     }
 
@@ -69,22 +64,5 @@ public class ScreenerUser {
             log.error("Non-existent ticker: {}", symbol);
             return null;
         }
-    }
-
-    private synchronized static Map<String, String> getQueryParams(WebSocketSession session) {
-        Map<String, String> queryParams = new HashMap<>();
-        String query = Objects.requireNonNull(session.getUri()).getQuery();
-
-        if (query == null) return queryParams;
-
-        String[] pairs = query.split("&");
-        for (String pair : pairs) {
-            String[] keyValue = pair.split("=");
-            if (keyValue.length > 1) {
-                queryParams.put(keyValue[0], keyValue[1]);
-            }
-        }
-
-        return queryParams;
     }
 }

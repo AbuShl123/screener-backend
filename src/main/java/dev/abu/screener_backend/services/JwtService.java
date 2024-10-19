@@ -1,4 +1,4 @@
-package dev.abu.screener_backend.config;
+package dev.abu.screener_backend.services;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;

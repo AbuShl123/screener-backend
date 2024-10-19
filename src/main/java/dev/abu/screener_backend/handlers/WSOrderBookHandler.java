@@ -1,7 +1,9 @@
-package dev.abu.screener_backend.binance;
+package dev.abu.screener_backend.handlers;
 
 import dev.abu.screener_backend.entity.ScreenerUser;
+import dev.abu.screener_backend.entity.Ticker;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.WebSocketSession;
@@ -12,6 +14,9 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 
+import static dev.abu.screener_backend.utils.RequestUtilities.getQueryParam;
+import static dev.abu.screener_backend.utils.RequestUtilities.getQueryParams;
+
 @Component
 @Slf4j
 public class WSOrderBookHandler extends TextWebSocketHandler {
@@ -20,19 +25,21 @@ public class WSOrderBookHandler extends TextWebSocketHandler {
     private final Set<ScreenerUser> users = new HashSet<>();
 
     @Override
-    public void afterConnectionEstablished(WebSocketSession session) {
+    public void afterConnectionEstablished(@NonNull WebSocketSession session) {
         addSession(session);
         log.info("New Websocket connection established: {}", session.getId());
     }
 
     @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+    public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
         closeSession(session);
         log.info("Websocket connection closed: {}", session.getId());
     }
 
     private void addSession(WebSocketSession session) {
-        users.add(new ScreenerUser(session));
+        Ticker ticker = Ticker.valueOf( ((String) session.getAttributes().get("ticker")).toUpperCase() );
+        String priceSpan = getQueryParam(session, "priceSpan");
+        users.add(new ScreenerUser(session, ticker, priceSpan));
     }
 
     private void closeSession(WebSocketSession session) {

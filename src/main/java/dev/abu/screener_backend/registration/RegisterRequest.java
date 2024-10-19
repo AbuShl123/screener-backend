@@ -22,6 +22,7 @@ public class RegisterRequest {
                 .email(email)
                 .password(password)
                 .userRole(AppUserRole.USER)
+                .enabled(true)
                 .build();
     }
 
