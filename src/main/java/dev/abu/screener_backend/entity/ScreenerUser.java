@@ -1,13 +1,11 @@
 package dev.abu.screener_backend.entity;
 
 import dev.abu.screener_backend.analysis.OrderBookDataAnalyzer;
-import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
 import java.io.IOException;
-import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -51,18 +49,6 @@ public class ScreenerUser {
             session.sendMessage(new TextMessage(analyzer.getJsonOrderBookData()));
         } catch (IOException e) {
             log.error("Error while sending order book data: {}", e.getMessage(), e);
-        }
-    }
-
-    private synchronized static Ticker getSymbol(WebSocketSession session) {
-        String uri = Objects.requireNonNull(session.getUri()).toString();
-        int endIndex = uri.contains("?") ? uri.indexOf('?') : uri.length();
-        String symbol = uri.substring(uri.lastIndexOf('/') + 1, endIndex);
-        try {
-            return Ticker.valueOf(symbol.toUpperCase());
-        } catch (Exception e) {
-            log.error("Non-existent ticker: {}", symbol);
-            return null;
         }
     }
 }

@@ -1,7 +1,6 @@
-package dev.abu.screener_backend.services;
+package dev.abu.screener_backend.registration;
 
 import dev.abu.screener_backend.appuser.AppUserRepository;
-import dev.abu.screener_backend.registration.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;

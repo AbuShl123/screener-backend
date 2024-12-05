@@ -1,6 +1,6 @@
 package dev.abu.screener_backend.config;
 
-import dev.abu.screener_backend.services.JwtService;
+import dev.abu.screener_backend.registration.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

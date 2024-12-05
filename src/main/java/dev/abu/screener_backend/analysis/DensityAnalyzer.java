@@ -10,20 +10,17 @@ import java.util.Map;
 
 public class DensityAnalyzer {
 
-
     /** Analyzers per ticker type. */
-    private static Map<Ticker, DensityAnalyzer> analyzers = new HashMap<>();
+    private static final Map<Ticker, DensityAnalyzer> analyzers = new HashMap<>();
 
     /** frequency of density level update (in seconds). */
     private static int FREQUENCY_OF_UPDATE = 180;
 
     public synchronized static DensityAnalyzer getDensityAnalyzer(Ticker ticker) {
-        if (analyzers.containsKey(ticker)) {
-            return analyzers.get(ticker);
-        } else {
+        if (!analyzers.containsKey(ticker)) {
             analyzers.put(ticker, new DensityAnalyzer());
-            return getDensityAnalyzer(ticker);
         }
+        return analyzers.get(ticker);
     }
 
     private LocalTime lastUpdateTime;
