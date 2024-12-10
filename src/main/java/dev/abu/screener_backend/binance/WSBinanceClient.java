@@ -13,7 +13,7 @@ public abstract class WSBinanceClient {
     /** Short english name of the concrete websocket */
     protected final String websocketName;
     /** Binance WebSocket URL to establish connection */
-    private String wsUrl;
+    protected String wsUrl;
     private StandardWebSocketClient client;
 
     public WSBinanceClient(String websocketName) {

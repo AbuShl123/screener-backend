@@ -9,13 +9,12 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
 @Setter
 @Slf4j
 public class WSBinanceOrderBookClient extends WSBinanceClient {
+
     private RabbitTemplate rabbitTemplate;
+    private String queue;
 
     /**
      * Native Binance WebSocket for Order Book data.
@@ -26,6 +25,11 @@ public class WSBinanceOrderBookClient extends WSBinanceClient {
         super("Order Book");
         setWsUrl(symbol);
         startWebSocket(true);
+    }
+
+    // TODO: send historical snapshot to the stream.
+    private void sendHistoricalData(String... symbols) {
+
     }
 
     private void setWsUrl(String... symbols) {
@@ -45,18 +49,13 @@ public class WSBinanceOrderBookClient extends WSBinanceClient {
     private class OrderBookHandler extends TextWebSocketHandler {
         @Override
         public void afterConnectionEstablished(@NonNull WebSocketSession session) {
-            log.info("Connected to {}: {}", websocketName, session.getId());
+            log.info("Connected to {}: {} - {}", websocketName, session.getId(), wsUrl);
         }
 
         @Override
         protected void handleTextMessage(@NonNull WebSocketSession session, @NonNull TextMessage message) {
             String payload = message.getPayload();
-            String symbol = extractSymbol(payload);
-            if (symbol == null) {
-                log.error("Couldn't get ticker from payload: {}", payload);
-                return;
-            }
-            rabbitTemplate.convertAndSend(symbol, payload);
+            rabbitTemplate.convertAndSend(queue, payload);
         }
 
         @Override
@@ -68,14 +67,5 @@ public class WSBinanceOrderBookClient extends WSBinanceClient {
         public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
             log.info("Disconnected from {}: {}", websocketName, status.getReason());
         }
-    }
-
-    public static String extractSymbol(String json) {
-        Pattern pattern = Pattern.compile("\"stream\"\\s*:\\s*\"(.*?)\"");
-        Matcher matcher = pattern.matcher(json);
-        if (matcher.find()) {
-            return matcher.group(1).split("@")[0];
-        }
-        return null;
     }
 }

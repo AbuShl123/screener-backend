@@ -25,6 +25,10 @@ public class RequestUtilities {
         return getQueryParams(session).get(name);
     }
 
+    public synchronized static String getQueryParam(HttpServletRequest request, String name) {
+        return getQueryParams(request).get(name);
+    }
+
     public synchronized static Map<String, String> getQueryParams(String query) {
         Map<String, String> queryParams = new HashMap<>();
 

@@ -1,38 +1,50 @@
 package dev.abu.screener_backend.analysis;
 
-import dev.abu.screener_backend.entity.Ticker;
+import lombok.Getter;
 import smile.math.MathEx;
 
-import java.time.Duration;
-import java.time.LocalTime;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class DensityAnalyzer {
 
-    /** Analyzers per ticker type. */
-    private static final Map<Ticker, DensityAnalyzer> analyzers = new HashMap<>();
+    private static final int FREQUENCY_OF_UPDATE = 10_000; // in millis
+    private static final Map<String, DensityAnalyzer> analyzers = new HashMap<>();
 
-    /** frequency of density level update (in seconds). */
-    private static int FREQUENCY_OF_UPDATE = 180;
-
-    public synchronized static DensityAnalyzer getDensityAnalyzer(Ticker ticker) {
-        if (!analyzers.containsKey(ticker)) {
-            analyzers.put(ticker, new DensityAnalyzer());
+    public synchronized static DensityAnalyzer getDensityAnalyzer(String symbol) {
+        if (!analyzers.containsKey(symbol)) {
+            analyzers.put(symbol, new DensityAnalyzer());
         }
-        return analyzers.get(ticker);
+        return analyzers.get(symbol);
     }
 
-    private LocalTime lastUpdateTime;
-    private double firstLevel;
-    private double secondLevel;
-    private double thirdLevel;
+    private long lastUpdateTime = System.currentTimeMillis();
+
+    @Getter private final AtomicReference<Double> firstLevel = new AtomicReference<>();
+    @Getter private final AtomicReference<Double> secondLevel = new AtomicReference<>();
+    @Getter private final AtomicReference<Double> thirdLevel = new AtomicReference<>();
 
     private DensityAnalyzer() {
     }
 
-    public int getDensity(double data) {
+    public synchronized int getDensity(double data) {
+        if (data < firstLevel.get()) {
+            return 0;
+        }
 
+        if (data < secondLevel.get()) {
+            return 1;
+        }
+
+        if (data < thirdLevel.get()) {
+            return 2;
+        }
+
+        return 3;
+    }
+
+    public synchronized int getDensity(double data, double firstLevel, double secondLevel, double thirdLevel) {
         if (data < firstLevel) {
             return 0;
         }
@@ -49,14 +61,10 @@ public class DensityAnalyzer {
     }
 
     public void setLevels(double[] dataSet) {
-        if (lastUpdateTime == null) {
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - lastUpdateTime >= FREQUENCY_OF_UPDATE) {
             updateLevels(dataSet);
-        }
-
-        var duration = Duration.between(lastUpdateTime, LocalTime.now());
-
-        if (duration.toSeconds() >= FREQUENCY_OF_UPDATE) {
-            updateLevels(dataSet);
+            lastUpdateTime = currentTime;
         }
     }
 
@@ -64,23 +72,21 @@ public class DensityAnalyzer {
         double mean = MathEx.mean(dataSet);
 
         if (mean >= 0 && mean < 1) {
-            firstLevel = 10;
-            secondLevel = 100;
-            thirdLevel = 1000;
+            firstLevel.set(10.0);
+            secondLevel.set(100.0);
+            thirdLevel.set(1000.0);
         }
 
         else if (mean > 0 && mean <= 1000) {
-            firstLevel = 50_000;
-            secondLevel = 200_000;
-            thirdLevel = 500_000;
+            firstLevel.set(50_000.0);
+            secondLevel.set(200_000.0);
+            thirdLevel.set(500_000.0);
         }
 
         else if (mean > 1000 && mean <= 10_000) {
-            firstLevel = 500_000;
-            secondLevel = 1_000_000;
-            thirdLevel = 10_000_000;
+            firstLevel.set(500_000.0);
+            secondLevel.set(1_000_000.0);
+            thirdLevel.set(10_000_000.0);
         }
-
-        lastUpdateTime = LocalTime.now();
     }
 }

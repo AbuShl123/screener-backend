@@ -44,7 +44,7 @@ public class OrderBookDataAnalyzer {
     public OrderBookDataAnalyzer(Ticker ticker, double range) {
         this.ticker = ticker;
         this.range = range;
-        this.densityAnalyzer = getDensityAnalyzer(this.ticker);
+        this.densityAnalyzer = getDensityAnalyzer(ticker.getSymbol());
         Comparator<Trade> sortByQuantity = Comparator.comparingDouble(Trade::getQuantity).reversed();
         this.bids = new TreeSet<>(sortByQuantity);
         this.asks = new TreeSet<>(sortByQuantity);
@@ -89,7 +89,7 @@ public class OrderBookDataAnalyzer {
             if (inclineIsTooBig(incline)) continue;
             double quantity = trade.get(1).asDouble();
             quantitiesDataSet[i] = quantity;
-            trades.add(new Trade(price, quantity, roundDown(incline), 0, isAsk, ticker.getSymbol()));
+            trades.add(new Trade(price, quantity, roundDown(incline), 0));
             i++;
         }
         quantitiesDataSet = Arrays.copyOf(quantitiesDataSet, i);

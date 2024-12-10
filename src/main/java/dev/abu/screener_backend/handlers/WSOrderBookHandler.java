@@ -1,42 +1,42 @@
 package dev.abu.screener_backend.handlers;
 
+import dev.abu.screener_backend.binance.jpa.TickerService;
+import dev.abu.screener_backend.rabbitmq.RabbitMQService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
-import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
-import java.io.IOException;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.HashMap;
+import java.util.Map;
 
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class WSOrderBookHandler extends TextWebSocketHandler {
 
-    private final Set<WebSocketSession> sessions = new HashSet<>();
+    private final Map<String, ClientSession> sessions = new HashMap<>();
+    private final RabbitMQService rabbitMQService;
+    private final TickerService tickerService;
 
     @Override
     public void afterConnectionEstablished(@NonNull WebSocketSession session) {
         log.info("New Websocket connection established: {}", session.getId());
-        sessions.add(session);
+        ClientSession clientSession = new ClientSession(session, rabbitMQService, tickerService);
+        if (clientSession.isOpen()) {
+            sessions.put(session.getId(), clientSession);
+        }
     }
 
     @Override
     public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
         log.info("Websocket connection closed: {}", session.getId());
-        sessions.remove(session);
-    }
-
-    public synchronized void broadcastOrderBook(String update) {
-        sessions.forEach(session -> {
-            try {
-                session.sendMessage(new TextMessage(update));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        });
+        var removedSession = sessions.remove(session.getId());
+        if (removedSession != null) {
+            removedSession.closeSession();
+        }
     }
 }

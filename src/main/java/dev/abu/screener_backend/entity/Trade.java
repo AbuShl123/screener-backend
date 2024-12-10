@@ -1,56 +1,61 @@
 package dev.abu.screener_backend.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.Id;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-@NoArgsConstructor
-@Data
-@Entity
-@Builder
+import java.io.Serializable;
+
+import static java.lang.Math.abs;
+
 @AllArgsConstructor
-public class Trade {
+@NoArgsConstructor
+@Setter
+@Getter
+public class Trade implements Comparable<Trade>, Serializable {
 
-    @Id
-    @GeneratedValue
-    private Long id;
     private double price;
     private double quantity;
     private double incline;
-    private double density;
-    private boolean isAsk;
-    private String symbol;
+    private int density;
 
-    public Trade(double price, double quantity, double incline, double density, boolean isAsk, String symbol) {
-        this.price = price;
-        this.quantity = quantity;
-        this.incline = incline;
-        this.density = density;
-        this.isAsk = isAsk;
-        this.symbol = symbol;
+    public Trade(double price, double quantity, double incline) {
+        this(price, quantity, incline, 0);
     }
 
-    public Trade(double price, double quantity, boolean isAsk, String symbol) {
-        this.price = price;
-        this.quantity = quantity;
-        this.isAsk = isAsk;
-        this.symbol = symbol;
+    public Trade(double price, double quantity) {
+        this(price, quantity, 0.0, 0);
     }
 
     @Override
-    public String toString() {
-        return "[" + price + ", " + quantity + ", " + incline + ", " + density + "]";
+    public int compareTo(Trade another) {
+        double qty1 = getQuantity();
+        double qty2 = another.getQuantity();
+        if (qty1 == qty2) return 1;
+        return (int) (qty1 - qty2);
     }
 
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof Trade t) {
-            return t.price == price && t.quantity == quantity;
+            return t.price == price;
         }
         return false;
+    }
+
+    @Override
+    public String toString() {
+        return String.format(
+                """
+                        {
+                        "price": "%f",
+                        "quantity": "%f",
+                        "incline": "%.2f",
+                        "density": "%d"
+                        }""",
+
+                price, quantity, abs(incline), density
+        );
     }
 }
