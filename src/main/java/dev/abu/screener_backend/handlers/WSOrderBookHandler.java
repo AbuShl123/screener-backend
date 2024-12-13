@@ -12,12 +12,15 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Component
 @Slf4j
 @RequiredArgsConstructor
 public class WSOrderBookHandler extends TextWebSocketHandler {
 
+    private final ExecutorService executorService = Executors.newScheduledThreadPool(10);
     private final Map<String, ClientSession> sessions = new HashMap<>();
     private final RabbitMQService rabbitMQService;
     private final TickerService tickerService;
@@ -25,10 +28,7 @@ public class WSOrderBookHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionEstablished(@NonNull WebSocketSession session) {
         log.info("New Websocket connection established: {}", session.getId());
-        ClientSession clientSession = new ClientSession(session, rabbitMQService, tickerService);
-        if (clientSession.isOpen()) {
-            sessions.put(session.getId(), clientSession);
-        }
+        executorService.submit(() -> createSession(session));
     }
 
     @Override
@@ -37,6 +37,13 @@ public class WSOrderBookHandler extends TextWebSocketHandler {
         var removedSession = sessions.remove(session.getId());
         if (removedSession != null) {
             removedSession.closeSession();
+        }
+    }
+
+    private void createSession(WebSocketSession session) {
+        ClientSession clientSession = new ClientSession(session, rabbitMQService, tickerService);
+        if (clientSession.isOpen()) {
+            sessions.put(session.getId(), clientSession);
         }
     }
 }

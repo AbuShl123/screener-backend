@@ -11,8 +11,7 @@ public class WSBinanceOrderBookClientFactory {
     private final RabbitTemplate rabbitTemplate;
 
     public void createClient(String queue, String... symbols) {
-        WSBinanceOrderBookClient client = new WSBinanceOrderBookClient(symbols);
+        WSBinanceOrderBookClient client = new WSBinanceOrderBookClient(queue, symbols);
         client.setRabbitTemplate(rabbitTemplate);
-        client.setQueue(queue);
     }
 }

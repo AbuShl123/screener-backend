@@ -111,8 +111,9 @@ public class OrderBookStream {
             hasUpdates = hasUpdates || traverseArray(bidsArray, false);
 
             if (hasUpdates) {
+                boolean haveDensitiesUpdated = densityAnalyzer.analyzeDensities(getQuantitiesDataSet());
+                if (haveDensitiesUpdated) quantitiesDataSet.clear();
                 sendData();
-                densityAnalyzer.setLevels(getQuantitiesDataSet());
             }
         } catch (JsonProcessingException e) {
             log.error(e.getMessage());

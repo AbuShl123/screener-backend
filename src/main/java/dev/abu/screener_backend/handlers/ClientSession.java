@@ -57,6 +57,7 @@ public class ClientSession {
         broadCastData(stream.getBids(), stream.getAsks());
         container = rabbitMQService.createClientConsumer(listener(), symbol);
         isOpen = true;
+        log.info("Client session is created for {}", symbol);
     }
 
     public MessageListener listener() {
@@ -68,7 +69,7 @@ public class ClientSession {
                 var bids = data.get("bids");
                 var asks = data.get("asks");
                 broadCastData(bids, asks);
-            } catch (IOException e) {
+            } catch (Exception e) {
                 log.error("Couldn't send message to {}", session, e);
             }
         };

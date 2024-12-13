@@ -1,6 +1,7 @@
 package dev.abu.screener_backend.config;
 
 
+import dev.abu.screener_backend.registration.RestAuthenticationFailureHandler;
 import lombok.AllArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -37,8 +38,15 @@ public class SecurityConfig {
                                 .authenticated()
                 )
 
-                .sessionManagement(sm -> sm.sessionCreationPolicy( SessionCreationPolicy.STATELESS ))
-                .addFilterBefore( jwtAuthFilter, UsernamePasswordAuthenticationFilter.class );
+                .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(
+                        (request, response, exception) -> {
+                            RestAuthenticationFailureHandler restAuthenticationFailureHandler = new RestAuthenticationFailureHandler();
+                            restAuthenticationFailureHandler.onAuthenticationFailure(request, response, exception);
+                        }
+                ))
+
+                .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

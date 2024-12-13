@@ -1,6 +1,6 @@
 package dev.abu.screener_backend.rabbitmq;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.abu.screener_backend.analysis.OrderBookStream;
 import lombok.RequiredArgsConstructor;
@@ -42,12 +42,9 @@ public class RabbitMQService {
         container.start();
     }
 
-    public DirectMessageListenerContainer createClientConsumer(
-            MessageListener messageListener,
-            String... symbols
-    ) {
+    public DirectMessageListenerContainer createClientConsumer(MessageListener messageListener, String symbol) {
         DirectMessageListenerContainer container = new DirectMessageListenerContainer(connectionFactory);
-        container.setQueueNames(symbols);
+        container.setQueueNames(symbol);
         container.setMessageListener(messageListener);
         container.start();
         return container;
@@ -55,30 +52,17 @@ public class RabbitMQService {
 
     public MessageListener getListener() {
         return (Message message) -> {
-            String payload = new String(message.getBody());
-            StringBuilder sb = new StringBuilder(payload);
-            sb.deleteCharAt(0);
-            sb.deleteCharAt(sb.length() - 1);
-            payload = sb.toString().replace("\\", "");
-            String symbol = extractSymbol(payload);
-            if (symbol == null) {
-                log.error("Couldn't get ticker from payload: {}", payload);
-                return;
+            try {
+                ObjectMapper mapper = new ObjectMapper();
+                String[] data = mapper.readValue(message.getBody(), new TypeReference<>() {});
+                String symbol = data[0];
+                String payload = data[1];
+                var stream = OrderBookStream.getInstance(symbol);
+                stream.setRabbitTemplate(rabbitTemplate);
+                stream.buffer(payload);
+            } catch (Exception e) {
+                log.error("Couldn't send raw data to OrderBookStream", e);
             }
-            var stream = OrderBookStream.getInstance(symbol);
-            stream.setRabbitTemplate(rabbitTemplate);
-            stream.buffer(payload);
         };
-    }
-
-    public String extractSymbol(String json) {
-        try {
-            ObjectMapper objectMapper = new ObjectMapper();
-            JsonNode rootNode = objectMapper.readTree(json);
-            String streamValue = rootNode.get("stream").asText();
-            return streamValue.split("@")[0];
-        } catch (Exception e) {
-            return null;
-        }
     }
 }

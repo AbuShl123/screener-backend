@@ -8,12 +8,11 @@ import dev.abu.screener_backend.entity.Ticker;
 import dev.abu.screener_backend.rabbitmq.RabbitMQService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import static dev.abu.screener_backend.binance.BinanceExchangeInfoClient.getExchangeInfo;
 
@@ -22,10 +21,26 @@ import static dev.abu.screener_backend.binance.BinanceExchangeInfoClient.getExch
 @Component
 public class BinanceWSRunner implements CommandLineRunner {
 
+    private static final String[] popularTickers = {
+            "BNXUSDT",
+            "SHIBUSDT",
+            "AVAXUSDT",
+            "TRXUSDT",
+            "USDCUSDT",
+            "ADAUSDT",
+            "DOGEUSDT",
+            "BNBUSDT",
+            "SOLUSDT",
+            "XRPUSDT",
+            "ETHUSDT",
+            "BTCUSDT"
+    };
+
     private final TickerService tickerService;
     private final WSBinanceOrderBookClientFactory orderBookFactory;
     private final RabbitMQService rabbitMQService;
-    private final Set<String> depths = new HashSet<>();
+    private final RabbitTemplate rabbitTemplate;
+    private final List<String> depths = new ArrayList<>();
 
     @Override
     public void run(String... args) {
@@ -33,6 +48,7 @@ public class BinanceWSRunner implements CommandLineRunner {
         setTickerPrices();
         startOrderBook();
         setRabbitMQServices();
+        sendHistoricalData();
     }
 
     private void setTickerPrices() {
@@ -52,7 +68,13 @@ public class BinanceWSRunner implements CommandLineRunner {
 
     private void startOrderBook() {
         int chunkSize = 30;
-        var tickers = tickerService.getAllSymbols();
+
+        List<String> tickers = new ArrayList<>(tickerService.getAllSymbols());
+        for (String popularTicker : popularTickers) {
+            tickers.remove(popularTicker.toLowerCase());
+            tickers.add(0, popularTicker.toLowerCase());
+        }
+
         for (int i = 0; i < tickers.size(); i += chunkSize) {
             var chunk = tickers.subList(i, Math.min(i + chunkSize, tickers.size()));
             var symbols = chunk.toArray(new String[0]);
@@ -60,6 +82,32 @@ public class BinanceWSRunner implements CommandLineRunner {
             depths.add(queue);
             orderBookFactory.createClient(queue, symbols);
         }
+    }
+
+    private void sendHistoricalData() {
+        List<String> symbols = new ArrayList<>(tickerService.getAllSymbols());
+        for (String popularTicker : popularTickers) {
+            symbols.remove(popularTicker.toLowerCase());
+            symbols.add(0, popularTicker.toLowerCase());
+        }
+        String depthHistQueue = "depth_historical";
+        rabbitMQService.createQueue(depthHistQueue);
+        sendHistoricalData(symbols);
+    }
+
+    private void sendHistoricalData(List<String> symbols) {
+        int counter = 15;
+        for (int i = 0; i < symbols.size(); i++) {
+            String symbol = symbols.get(i);
+            if (counter == 15) {
+                log.info("Currently on: {} ({})", symbol, i);
+                counter = 0;
+            }
+            String payload = BinanceOrderBookClient.getOrderBook(symbol);
+            rabbitTemplate.convertAndSend("depth_historical", new String[] {symbol, payload});
+            counter++;
+        }
+        log.info("Success: all historical data are sent.");
     }
 
     private void setAllTickers() {

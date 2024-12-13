@@ -3,8 +3,11 @@ package dev.abu.screener_backend.binance;
 import jakarta.websocket.ContainerProvider;
 import jakarta.websocket.WebSocketContainer;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
+
+import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 public abstract class WSBinanceClient {
@@ -20,10 +23,6 @@ public abstract class WSBinanceClient {
         this.websocketName = websocketName;
     }
 
-    public WSBinanceClient() {
-        this.websocketName = "Binance Order Book";
-    }
-
     protected void setWsUrl(String wsUrl) {
         this.wsUrl = BASE_URL + wsUrl;
     }
@@ -35,6 +34,11 @@ public abstract class WSBinanceClient {
             container.setDefaultMaxTextMessageBufferSize(10 * 1024 * 1024);
         }
         client = new StandardWebSocketClient(container);
+        client.execute(getWebSocketHandler(), this.wsUrl);
+    }
+
+    protected void reconnect() {
+        log.info("Attempting reconnection for {}", websocketName);
         client.execute(getWebSocketHandler(), this.wsUrl);
     }
 
