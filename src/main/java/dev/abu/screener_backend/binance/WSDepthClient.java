@@ -15,12 +15,11 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import java.util.HashMap;
 import java.util.Map;
 
+import static dev.abu.screener_backend.utils.EnvParams.*;
+
 @Setter
 @Slf4j
 public class WSDepthClient extends WSBinanceClient {
-
-    public static final String FUT_SIGN = ".f";
-
     Map<String, Long> lastTimes = new HashMap<>();
     private final ObjectMapper mapper = new ObjectMapper();
     private final boolean isSpot;
@@ -49,7 +48,7 @@ public class WSDepthClient extends WSBinanceClient {
         }
 
         path.deleteCharAt(path.length() - 1);
-        this.wsUrl = (isSpot ? SPOT_BASE_URL : FUT_BASE_URL) + path;
+        this.wsUrl = (isSpot ? STREAM_SPOT_URL : STREAM_FUT_URL) + "/" + path;
     }
 
     @Override

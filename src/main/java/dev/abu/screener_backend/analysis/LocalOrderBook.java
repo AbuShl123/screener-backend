@@ -9,13 +9,13 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static dev.abu.screener_backend.binance.DepthClient.getDepthSnapshot;
-import static dev.abu.screener_backend.binance.WSDepthClient.FUT_SIGN;
+import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
 @Slf4j
 public class LocalOrderBook {
 
     private static final Map<String, LocalOrderBook> map = new HashMap<>();
-    private static final long AUTO_RE_SYNC_FREQUENCY = 60 * 60 * 1000; // every hour
+    private static final long AUTO_RE_SYNC_FREQUENCY = 60 * 60 * 1000;
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final String symbol;

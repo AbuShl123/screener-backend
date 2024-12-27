@@ -7,8 +7,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeSet;
 
-import static dev.abu.screener_backend.analysis.OrderBookStream.CUP_SIZE;
-import static dev.abu.screener_backend.analysis.OrderBookStream.MAX_INCLINE;
+import static dev.abu.screener_backend.utils.EnvParams.CUP_SIZE;
+import static dev.abu.screener_backend.utils.EnvParams.MAX_INCLINE;
 
 @Getter
 public class TradeList {

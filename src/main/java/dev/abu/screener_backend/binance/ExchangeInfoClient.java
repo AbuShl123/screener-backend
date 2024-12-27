@@ -2,6 +2,8 @@ package dev.abu.screener_backend.binance;
 
 import lombok.extern.slf4j.Slf4j;
 
+import static dev.abu.screener_backend.utils.EnvParams.FUT_URL;
+import static dev.abu.screener_backend.utils.EnvParams.SPOT_URL;
 import static io.restassured.RestAssured.given;
 
 @Slf4j
@@ -12,9 +14,9 @@ public class ExchangeInfoClient {
     public synchronized static String getExchangeInfo(boolean isSpot) {
         String baseUri;
         if (isSpot) {
-            baseUri = "https://api.binance.com/api/v3";
+            baseUri = SPOT_URL;
         } else {
-            baseUri = "https://fapi.binance.com/fapi/v1";
+            baseUri = FUT_URL;
         }
 
         return

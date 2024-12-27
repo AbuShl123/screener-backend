@@ -9,9 +9,6 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 @Slf4j
 public abstract class WSBinanceClient {
 
-    protected static final String SPOT_BASE_URL = "wss://stream.binance.com/";
-    protected static final String FUT_BASE_URL = "wss://fstream.binance.com/";
-
     protected final String websocketName;
     protected String wsUrl;
     private StandardWebSocketClient client;

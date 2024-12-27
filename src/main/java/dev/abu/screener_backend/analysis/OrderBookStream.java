@@ -5,22 +5,22 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.abu.screener_backend.binance.TickerClient;
 import dev.abu.screener_backend.entity.Trade;
-import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
-import java.util.*;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.TreeSet;
 
-import static dev.abu.screener_backend.binance.WSDepthClient.FUT_SIGN;
+import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
+import static dev.abu.screener_backend.utils.EnvParams.MAX_INCLINE;
 import static java.lang.Math.abs;
 
 @Slf4j
 public class OrderBookStream {
 
-    public static final int MAX_INCLINE = 30;
-    public static final int CUP_SIZE = 5;
     private static final Map<String, OrderBookStream> streams = new HashMap<>();
     private static final ObjectMapper mapper = new ObjectMapper();
 

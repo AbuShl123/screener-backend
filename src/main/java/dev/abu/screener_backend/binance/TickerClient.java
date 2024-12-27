@@ -8,12 +8,12 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
+import static dev.abu.screener_backend.utils.EnvParams.SPOT_URL;
 import static io.restassured.RestAssured.given;
 
 @Slf4j
-public class TickerClient extends BinanceClient {
+public class TickerClient {
 
     private static final Map<String, Double> prices = new HashMap<>();
     private static final ObjectMapper mapper = new ObjectMapper();
@@ -49,7 +49,8 @@ public class TickerClient extends BinanceClient {
 
     private static String getData() {
         return
-                given().when()
+                given().baseUri(SPOT_URL)
+                        .when()
                         .get("/ticker/price")
                         .then()
                         .extract().response().asPrettyString();

@@ -16,7 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static dev.abu.screener_backend.binance.TickerClient.setPrices;
-import static dev.abu.screener_backend.binance.WSDepthClient.FUT_SIGN;
+import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
 @Slf4j
 @RequiredArgsConstructor

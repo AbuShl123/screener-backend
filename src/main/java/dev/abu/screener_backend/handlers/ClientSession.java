@@ -20,8 +20,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
 
-import static dev.abu.screener_backend.analysis.OrderBookStream.CUP_SIZE;
-import static dev.abu.screener_backend.binance.WSDepthClient.FUT_SIGN;
+import static dev.abu.screener_backend.utils.EnvParams.CUP_SIZE;
+import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 import static dev.abu.screener_backend.utils.RequestUtilities.getQueryParams;
 
 @Slf4j

@@ -5,10 +5,12 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalTime;
 
+import static dev.abu.screener_backend.utils.EnvParams.FUT_URL;
+import static dev.abu.screener_backend.utils.EnvParams.SPOT_URL;
 import static io.restassured.RestAssured.given;
 
 @Slf4j
-public class DepthClient extends BinanceClient {
+public class DepthClient {
 
     private static int weightUserPerMinute = 0;
 
@@ -25,9 +27,9 @@ public class DepthClient extends BinanceClient {
 
         String baseUri;
         if (isSpot) {
-            baseUri = "https://api.binance.com/api/v3";
+            baseUri = SPOT_URL;
         } else {
-            baseUri = "https://fapi.binance.com/fapi/v1";
+            baseUri = FUT_URL;
         }
 
         Response response = given()
