@@ -15,13 +15,13 @@ public class Ticker {
     @GeneratedValue
     private Long id;
     private String symbol;
+    private boolean hasSpot;
+    private boolean hasFut;
 
-    public Ticker(String symbol) {
+    public Ticker(String symbol, boolean hasSpot, boolean hasFut) {
         this.symbol = symbol.toLowerCase();
-    }
-
-    public static Ticker of(String symbol) {
-        return new Ticker(symbol);
+        this.hasSpot = hasSpot;
+        this.hasFut = hasFut;
     }
 
     public String toString() {

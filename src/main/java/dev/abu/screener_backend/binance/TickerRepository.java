@@ -1,4 +1,4 @@
-package dev.abu.screener_backend.binance.jpa;
+package dev.abu.screener_backend.binance;
 
 import dev.abu.screener_backend.entity.Ticker;
 import org.springframework.data.jpa.repository.JpaRepository;

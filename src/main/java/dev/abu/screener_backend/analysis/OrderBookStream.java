@@ -3,7 +3,7 @@ package dev.abu.screener_backend.analysis;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.abu.screener_backend.binance.Tickers;
+import dev.abu.screener_backend.binance.TickerClient;
 import dev.abu.screener_backend.entity.Trade;
 import lombok.Getter;
 import lombok.Setter;
@@ -11,7 +11,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 
+import static dev.abu.screener_backend.binance.WSDepthClient.FUT_SIGN;
 import static java.lang.Math.abs;
 
 @Slf4j
@@ -23,7 +25,7 @@ public class OrderBookStream {
     private static final ObjectMapper mapper = new ObjectMapper();
 
     private final String symbol;
-    private final TradeList orderBook = new TradeList();
+    private final TradeList orderBook;
     private final HashSet<Double> quantitiesDataSet = new HashSet<>();
     private final DensityAnalyzer densityAnalyzer;
 
@@ -32,92 +34,54 @@ public class OrderBookStream {
 
     private OrderBookStream(String symbol) {
         this.symbol = symbol;
+        this.orderBook = new TradeList(symbol);
         this.densityAnalyzer = DensityAnalyzer.getDensityAnalyzer(symbol);
     }
 
+    public static synchronized OrderBookStream createInstance(String symbol) {
+        var stream = new OrderBookStream(symbol);
+        streams.put(symbol, stream);
+        return stream;
+    }
+
     public static synchronized OrderBookStream getInstance(String symbol) {
-        symbol = symbol.toLowerCase();
-        if (!streams.containsKey(symbol)) {
-            streams.put(symbol, new OrderBookStream(symbol));
-        }
         return streams.get(symbol);
     }
 
-    @Getter
-    private class TradeList {
-        private final Map<Integer, TreeSet<Trade>> bids = new HashMap<>();
-        private final Map<Integer, TreeSet<Trade>> asks = new HashMap<>();
-
-        private TradeList() {
-            int n = MAX_INCLINE;
-            while (n >= -MAX_INCLINE) {
-                bids.put(n, new TreeSet<>());
-                asks.put(n, new TreeSet<>());
-                n -= 5;
-            }
-        }
-
-        private boolean addTrade(double price, double qty, double incline, boolean isAsk) {
-            int level = getLevel(incline);
-            if (isAsk) {
-                return addTrade(asks.get(level), price, qty, incline);
-            } else {
-                return addTrade(bids.get(level), price, qty, incline);
-            }
-        }
-
-        private boolean addTrade(TreeSet<Trade> orderBook, double price, double qty, double incline) {
-            // case when there are 0 trades in the order book
-            if (orderBook.isEmpty() || orderBook.size() < CUP_SIZE) {
-                orderBook.add(new Trade(price, qty, incline));
-                return true;
-            }
-
-            // case when price level should be removed
-            if (qty == 0) {
-                return orderBook.removeIf(trade -> trade.getPrice() == price);
-            }
-
-            // case when there is already a trade with a given price
-            if (orderBook.removeIf(trade -> trade.getPrice() == price)) {
-                orderBook.add(new Trade(price, qty, incline));
-                return true;
-            }
-
-            // if new trade is lower than all current trades in ob, then no need to add it
-            if (orderBook.first().getQuantity() > qty) return false;
-
-            // otherwise, we will add this trade
-            orderBook.add(new Trade(price, qty));
-
-            // making sure that size won't exceed the given cup size
-            if (orderBook.size() > CUP_SIZE) {
-                orderBook.pollFirst();
-            }
-
-            return true;
-        }
+    public void clear() {
+        orderBook.clear();
     }
 
     public synchronized void buffer(String rawData) {
         try {
             boolean hasUpdates;
             JsonNode json = mapper.readTree(rawData);
+            long timestamp = getTimeStamp(json);
 
             var asksArray = getTradeArray(rawData, json, true);
-            hasUpdates = traverseArray(asksArray, true);
+            hasUpdates = traverseArray(asksArray, timestamp, true);
 
             var bidsArray = getTradeArray(rawData, json, false);
-            hasUpdates = hasUpdates || traverseArray(bidsArray, false);
+            hasUpdates = hasUpdates || traverseArray(bidsArray, timestamp, false);
+
+            boolean haveDensitiesUpdated = densityAnalyzer.analyzeDensities(getQuantitiesDataSet());
+            if (haveDensitiesUpdated) quantitiesDataSet.clear();
 
             if (hasUpdates) {
-                boolean haveDensitiesUpdated = densityAnalyzer.analyzeDensities(getQuantitiesDataSet());
-                if (haveDensitiesUpdated) quantitiesDataSet.clear();
                 sendData();
             }
         } catch (JsonProcessingException e) {
             log.error(e.getMessage());
         }
+    }
+
+    private long getTimeStamp(JsonNode json) {
+        JsonNode data = json.get("data");
+        if (data == null) return System.currentTimeMillis();
+        JsonNode eField = data.get("E");
+        if (eField == null) return System.currentTimeMillis();
+        long timestamp = eField.asLong();
+        return timestamp == 0 ? System.currentTimeMillis() : timestamp;
     }
 
     private JsonNode getTradeArray(String rawData, JsonNode json, boolean ask) {
@@ -134,32 +98,32 @@ public class OrderBookStream {
         }
 
         if (array == null) {
-            log.error("{} array is null: {}", arrayShort, rawData);
+            log.error("{} array for symbol {} is null: {}", arrayShort, symbol, rawData);
             return null;
         }
 
         return array;
     }
 
-    private boolean traverseArray(JsonNode array, boolean isAsk) {
+    private boolean traverseArray(JsonNode array, long timestamp, boolean isAsk) {
         if (array == null || (array.isArray() && array.isEmpty())) {
             return false;
         }
 
         boolean hasUpdates = false;
         for (JsonNode node : array) {
-            var price = node.get(0).asDouble();
+            var price = node.get(0).asText();
             var qty = node.get(1).asDouble();
-            hasUpdates = filterByRange(price, qty, isAsk);
+            hasUpdates = filterByRange(price, qty, isAsk, timestamp);
         }
         return hasUpdates;
     }
 
-    private boolean filterByRange(double price, double qty, boolean isAsk) {
+    private boolean filterByRange(String price, double qty, boolean isAsk, long timestamp) {
         double incline = getIncline(price);
         boolean hasUpdates = false;
         if (abs(incline) <= MAX_INCLINE) {
-            hasUpdates = orderBook.addTrade(price, qty, incline, isAsk);
+            hasUpdates = orderBook.addTrade(price, qty, incline, isAsk, timestamp);
             quantitiesDataSet.add(qty);
         }
         return hasUpdates;
@@ -180,26 +144,15 @@ public class OrderBookStream {
         return orderBook.getAsks();
     }
 
-    private int getLevel(double incline) {
-        int n = (int) incline;
-        int ost = n % 5;
-        if (n == 0 || ost == 0) return n;
-        int level;
-        if (n > 0) {
-            level = n + (5 - ost);
-        } else {
-            level = n - (5 + ost);
-        }
-        return level;
-    }
-
     public double[] getQuantitiesDataSet() {
         return quantitiesDataSet.stream().mapToDouble(e -> e).toArray();
     }
 
-    private double getIncline(double price) {
-        double marketPrice = Tickers.getPrice(symbol);
-        double ratio = price / marketPrice;
+    private double getIncline(String price) {
+        double p = Double.parseDouble(price);
+        String ticker = symbol.replace(FUT_SIGN, "");
+        double marketPrice = TickerClient.getPrice(ticker);
+        double ratio = p / marketPrice;
         return (ratio - 1) * 100;
     }
 }

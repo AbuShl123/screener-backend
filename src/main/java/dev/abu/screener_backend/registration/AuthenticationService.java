@@ -40,7 +40,6 @@ public class AuthenticationService {
         var jwtToken = jwtService.generateToken( user );
         var authResponse = AuthenticationResponse.builder().token( jwtToken ).build();
         return new ResponseEntity<>(authResponse.create(), HttpStatus.OK);
-
     }
 
     public ResponseEntity<?> authenticate(AuthenticationRequest request) {

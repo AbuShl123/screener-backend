@@ -15,17 +15,14 @@ import static java.lang.Math.abs;
 @Getter
 public class Trade implements Comparable<Trade>, Serializable {
 
-    private double price;
+    private String price;
     private double quantity;
     private double incline;
     private int density;
+    private long life;
 
-    public Trade(double price, double quantity, double incline) {
-        this(price, quantity, incline, 0);
-    }
-
-    public Trade(double price, double quantity) {
-        this(price, quantity, 0.0, 0);
+    public Trade(String price, double quantity, double incline, long life) {
+        this(price, quantity, incline, 0, life);
     }
 
     @Override
@@ -39,7 +36,7 @@ public class Trade implements Comparable<Trade>, Serializable {
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof Trade t) {
-            return t.price == price;
+            return t.price.equals(price);
         }
         return false;
     }
@@ -48,14 +45,15 @@ public class Trade implements Comparable<Trade>, Serializable {
     public String toString() {
         return String.format(
                 """
-                        {
-                        "price": "%f",
-                        "quantity": "%f",
-                        "incline": "%.2f",
-                        "density": "%d"
-                        }""",
+                [
+                "%s",
+                "%s",
+                "%.2f",
+                %d,
+                %d
+                ]""",
 
-                price, quantity, abs(incline), density
+                price, quantity, abs(incline), density, life
         );
     }
 }

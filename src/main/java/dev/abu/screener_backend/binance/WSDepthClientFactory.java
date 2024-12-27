@@ -6,12 +6,11 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 @RequiredArgsConstructor
-public class WSBinanceOrderBookClientFactory {
+public class WSDepthClientFactory {
 
     private final RabbitTemplate rabbitTemplate;
 
-    public void createClient(String queue, String... symbols) {
-        WSBinanceOrderBookClient client = new WSBinanceOrderBookClient(queue, symbols);
-        client.setRabbitTemplate(rabbitTemplate);
+    public void createClient(boolean isSpot, String queue, String... symbols) {
+        new WSDepthClient(isSpot, queue, symbols);
     }
 }

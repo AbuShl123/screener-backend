@@ -3,19 +3,16 @@ package dev.abu.screener_backend.binance;
 import jakarta.websocket.ContainerProvider;
 import jakarta.websocket.WebSocketContainer;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
-
-import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 public abstract class WSBinanceClient {
 
-    protected static final String BASE_URL = "wss://stream.binance.com:443/";
-    /** Short english name of the concrete websocket */
+    protected static final String SPOT_BASE_URL = "wss://stream.binance.com/";
+    protected static final String FUT_BASE_URL = "wss://fstream.binance.com/";
+
     protected final String websocketName;
-    /** Binance WebSocket URL to establish connection */
     protected String wsUrl;
     private StandardWebSocketClient client;
 
@@ -23,16 +20,14 @@ public abstract class WSBinanceClient {
         this.websocketName = websocketName;
     }
 
-    protected void setWsUrl(String wsUrl) {
-        this.wsUrl = BASE_URL + wsUrl;
-    }
+    protected abstract TextWebSocketHandler getWebSocketHandler();
 
-    protected void startWebSocket(boolean increaseBufferSize) {
+    protected abstract void setWsUrl(String... symbols);
+
+    protected void startWebSocket() {
         WebSocketContainer container = ContainerProvider.getWebSocketContainer();
-        if (increaseBufferSize) {
-            // Set max message buffer size (10MB)
-            container.setDefaultMaxTextMessageBufferSize(10 * 1024 * 1024);
-        }
+        // Set max message buffer size (10MB)
+        container.setDefaultMaxTextMessageBufferSize(10 * 1024 * 1024);
         client = new StandardWebSocketClient(container);
         client.execute(getWebSocketHandler(), this.wsUrl);
     }
@@ -41,6 +36,4 @@ public abstract class WSBinanceClient {
         log.info("Attempting reconnection for {}", websocketName);
         client.execute(getWebSocketHandler(), this.wsUrl);
     }
-
-    protected abstract TextWebSocketHandler getWebSocketHandler();
 }

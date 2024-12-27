@@ -8,12 +8,12 @@ import java.time.LocalTime;
 import static io.restassured.RestAssured.given;
 
 @Slf4j
-public class BinanceOrderBookClient extends BinanceClient {
+public class DepthClient extends BinanceClient {
 
     private static int weightUserPerMinute = 0;
 
-    public synchronized static String getOrderBook(String symbol) {
-        if (weightUserPerMinute >= 5850) {
+    public synchronized static String getDepthSnapshot(String symbol, boolean isSpot) {
+        if (weightUserPerMinute >= 5800) {
             int secondsToWait = 60 - LocalTime.now().getSecond();
             log.info("Request weight is {}. Waiting for {} seconds", weightUserPerMinute, secondsToWait);
             try {
@@ -23,7 +23,15 @@ public class BinanceOrderBookClient extends BinanceClient {
             }
         }
 
+        String baseUri;
+        if (isSpot) {
+            baseUri = "https://api.binance.com/api/v3";
+        } else {
+            baseUri = "https://fapi.binance.com/fapi/v1";
+        }
+
         Response response = given()
+                .baseUri(baseUri)
                 .param("symbol", symbol.toUpperCase())
                 .param("limit", 1000)
                 .when()

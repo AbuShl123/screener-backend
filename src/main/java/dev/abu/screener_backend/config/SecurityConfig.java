@@ -38,12 +38,12 @@ public class SecurityConfig {
                                 .authenticated()
                 )
 
-                .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(
-                        (request, response, exception) -> {
-                            RestAuthenticationFailureHandler restAuthenticationFailureHandler = new RestAuthenticationFailureHandler();
-                            restAuthenticationFailureHandler.onAuthenticationFailure(request, response, exception);
-                        }
-                ))
+//                .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(
+//                        (request, response, exception) -> {
+//                            RestAuthenticationFailureHandler restAuthenticationFailureHandler = new RestAuthenticationFailureHandler();
+//                            restAuthenticationFailureHandler.onAuthenticationFailure(request, response, exception);
+//                        }
+//                ))
 
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

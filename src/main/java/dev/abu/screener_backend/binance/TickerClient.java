@@ -13,14 +13,14 @@ import java.util.Set;
 import static io.restassured.RestAssured.given;
 
 @Slf4j
-public class Tickers extends BinanceClient {
+public class TickerClient extends BinanceClient {
 
     private static final Map<String, Double> prices = new HashMap<>();
     private static final ObjectMapper mapper = new ObjectMapper();
 
     private record SymbolPrice(String symbol, double price) { }
 
-    public static void setPrices(Set<String> symbols) {
+    public static void setPrices(List<String> symbols) {
         try {
             String payload = getData();
             List<SymbolPrice> pairs = mapper.readValue(payload, new TypeReference<>() {});
@@ -39,7 +39,12 @@ public class Tickers extends BinanceClient {
     }
 
     public static synchronized double getPrice(String symbol) {
-        return prices.get(symbol);
+        double price = prices.getOrDefault(symbol, 0.0);
+        if (price == 0.0) {
+            log.error("price not set for symbol {}", symbol);
+            return 1;
+        }
+        return price;
     }
 
     private static String getData() {

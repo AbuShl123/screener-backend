@@ -1,22 +1,29 @@
 package dev.abu.screener_backend.binance;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.abu.screener_backend.analysis.LocalOrderBook;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.lang.NonNull;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @Setter
 @Slf4j
-public class WSBinanceOrderBookClient extends WSBinanceClient {
+public class WSDepthClient extends WSBinanceClient {
 
-    private RabbitTemplate rabbitTemplate;
-    private final String queue;
+    public static final String FUT_SIGN = ".f";
+
+    Map<String, Long> lastTimes = new HashMap<>();
+    private final ObjectMapper mapper = new ObjectMapper();
+    private final boolean isSpot;
     private final String[] symbols;
 
     /**
@@ -24,21 +31,25 @@ public class WSBinanceOrderBookClient extends WSBinanceClient {
      *
      * @param symbols for which data should be received.
      */
-    public WSBinanceOrderBookClient(String queue, String... symbols) {
-        super("Order Book [" + queue + "]");
-        this.queue = queue;
+    public WSDepthClient(boolean isSpot, String depth, String... symbols) {
+        super("Order Book " + (isSpot ? "Spot" : "Futures") + " [" + depth + "]");
+        this.isSpot = isSpot;
         this.symbols = symbols;
         setWsUrl(symbols);
-        startWebSocket(true);
+        startWebSocket();
     }
 
-    private void setWsUrl(String... symbols) {
-        StringBuilder sb = new StringBuilder("stream?streams=");
+    protected void setWsUrl(String... symbols) {
+        String stream = isSpot ? "@depth/" : "@depth@500ms/";
+
+        StringBuilder path = new StringBuilder("stream?streams=");
         for (String symbol : symbols) {
-            sb.append(symbol.toLowerCase()).append("@depth/");
+            path.append(symbol.toLowerCase()).append(stream);
+            lastTimes.put(symbol, 0L);
         }
-        sb.deleteCharAt(sb.length() - 1);
-        setWsUrl(sb.toString());
+
+        path.deleteCharAt(path.length() - 1);
+        this.wsUrl = (isSpot ? SPOT_BASE_URL : FUT_BASE_URL) + path;
     }
 
     @Override
@@ -47,20 +58,19 @@ public class WSBinanceOrderBookClient extends WSBinanceClient {
     }
 
     private class OrderBookHandler extends TextWebSocketHandler {
+
         @Override
         public void afterConnectionEstablished(@NonNull WebSocketSession session) {
             log.info("Connected to {}: {} - {}", websocketName, session.getId(), wsUrl);
         }
 
         @Override
-        protected void handleTextMessage(@NonNull WebSocketSession session, @NonNull TextMessage message) {
+        protected void handleTextMessage(@NonNull WebSocketSession session, @NonNull TextMessage message) throws JsonProcessingException {
             String payload = message.getPayload();
             String symbol = extractSymbol(payload);
-            if (symbol == null) {
-                log.error("Couldn't get symbol from payload.");
-                return;
-            }
-            rabbitTemplate.convertAndSend(queue, new String[]{symbol, payload});
+            if (symbol == null) return;
+            String stream = isSpot ? symbol : symbol + FUT_SIGN;
+            LocalOrderBook.getInstance(stream).process(payload);
         }
 
         @Override
@@ -72,29 +82,19 @@ public class WSBinanceOrderBookClient extends WSBinanceClient {
         public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
             log.info("Disconnected from {} (symbols={}) : reason = {}", websocketName, symbols, status.getReason());
             reconnect();
-            sendHistoricalData(symbols);
+            reSyncLocalOrderBooks();
         }
     }
 
-    private void sendHistoricalData(String[] symbols) {
-        int counter = 15;
-        for (int i = 0; i < symbols.length; i++) {
-            String symbol = symbols[i];
-            if (counter == 15) {
-                log.info("Currently on: {} ({})", symbol, i);
-                counter = 0;
-            }
-            String payload = BinanceOrderBookClient.getOrderBook(symbol);
-            rabbitTemplate.convertAndSend("depth_historical", new String[] {symbol, payload});
-            counter++;
+    private void reSyncLocalOrderBooks() {
+        for (String symbol : symbols) {
+            LocalOrderBook.getInstance(symbol).reSyncOrderBook();
         }
-        log.info("Success: all historical data for {} are sent.", queue);
     }
 
     public String extractSymbol(String json) {
         try {
-            ObjectMapper objectMapper = new ObjectMapper();
-            JsonNode rootNode = objectMapper.readTree(json);
+            JsonNode rootNode = mapper.readTree(json);
             String streamValue = rootNode.get("stream").asText();
             return streamValue.split("@")[0];
         } catch (Exception e) {
