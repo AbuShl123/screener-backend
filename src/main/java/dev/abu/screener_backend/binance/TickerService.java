@@ -23,7 +23,7 @@ public class TickerService {
 
     public static final String[] popularTickers = {
             "bnxusdt",
-            "shibusdt",
+//            "shibusdt",
             "avaxusdt",
             "trxusdt",
             "usdcusdt",

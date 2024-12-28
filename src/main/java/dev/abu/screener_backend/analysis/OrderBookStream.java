@@ -5,14 +5,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.abu.screener_backend.binance.TickerClient;
 import dev.abu.screener_backend.entity.Trade;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.TreeSet;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 import static dev.abu.screener_backend.utils.EnvParams.MAX_INCLINE;
@@ -28,9 +24,6 @@ public class OrderBookStream {
     private final TradeList orderBook;
     private final HashSet<Double> quantitiesDataSet = new HashSet<>();
     private final DensityAnalyzer densityAnalyzer;
-
-    @Setter
-    private RabbitTemplate rabbitTemplate;
 
     private OrderBookStream(String symbol) {
         this.symbol = symbol;
@@ -54,22 +47,17 @@ public class OrderBookStream {
 
     public synchronized void buffer(String rawData) {
         try {
-            boolean hasUpdates;
             JsonNode json = mapper.readTree(rawData);
             long timestamp = getTimeStamp(json);
 
             var asksArray = getTradeArray(rawData, json, true);
-            hasUpdates = traverseArray(asksArray, timestamp, true);
+            traverseArray(asksArray, timestamp, true);
 
             var bidsArray = getTradeArray(rawData, json, false);
-            hasUpdates = hasUpdates || traverseArray(bidsArray, timestamp, false);
+            traverseArray(bidsArray, timestamp, false);
 
-            boolean haveDensitiesUpdated = densityAnalyzer.analyzeDensities(getQuantitiesDataSet());
-            if (haveDensitiesUpdated) quantitiesDataSet.clear();
-
-            if (hasUpdates) {
-                sendData();
-            }
+            densityAnalyzer.analyzeDensities(getQuantitiesDataSet());
+            quantitiesDataSet.clear();
         } catch (JsonProcessingException e) {
             log.error(e.getMessage());
         }
@@ -105,43 +93,32 @@ public class OrderBookStream {
         return array;
     }
 
-    private boolean traverseArray(JsonNode array, long timestamp, boolean isAsk) {
+    private void traverseArray(JsonNode array, long timestamp, boolean isAsk) {
         if (array == null || (array.isArray() && array.isEmpty())) {
-            return false;
+            return;
         }
 
-        boolean hasUpdates = false;
         for (JsonNode node : array) {
             var price = node.get(0).asText();
             var qty = node.get(1).asDouble();
-            hasUpdates = filterByRange(price, qty, isAsk, timestamp);
+            filterByRange(price, qty, isAsk, timestamp);
         }
-        return hasUpdates;
     }
 
-    private boolean filterByRange(String price, double qty, boolean isAsk, long timestamp) {
+    private void filterByRange(String price, double qty, boolean isAsk, long timestamp) {
         double incline = getIncline(price);
-        boolean hasUpdates = false;
         if (abs(incline) <= MAX_INCLINE) {
-            hasUpdates = orderBook.addTrade(price, qty, incline, isAsk, timestamp);
+            orderBook.addTrade(price, qty, incline, isAsk, timestamp);
             quantitiesDataSet.add(qty);
         }
-        return hasUpdates;
     }
 
-    private void sendData() {
-        Map<String, Map<Integer, TreeSet<Trade>>> data = new HashMap<>();
-        data.put("bids", getBids());
-        data.put("asks", getAsks());
-        rabbitTemplate.convertAndSend(symbol, data);
+    public synchronized List<Trade> getBids() {
+        return orderBook.getBids().values().stream().flatMap(Set::stream).collect(Collectors.toList());
     }
 
-    public synchronized Map<Integer, TreeSet<Trade>> getBids() {
-        return orderBook.getBids();
-    }
-
-    public synchronized Map<Integer, TreeSet<Trade>> getAsks() {
-        return orderBook.getAsks();
+    public synchronized List<Trade> getAsks() {
+        return orderBook.getAsks().values().stream().flatMap(Set::stream).collect(Collectors.toList());
     }
 
     public double[] getQuantitiesDataSet() {

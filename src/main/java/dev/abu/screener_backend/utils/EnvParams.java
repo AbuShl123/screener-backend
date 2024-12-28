@@ -14,6 +14,7 @@ public class EnvParams {
     public static final String FUT_URL;
     public static final String STREAM_SPOT_URL;
     public static final String STREAM_FUT_URL;
+    public static final int CHUNK_SIZE;
     public static final int CUP_SIZE;
     public static final int MAX_INCLINE;
     public static final String FUT_SIGN;
@@ -32,27 +33,16 @@ public class EnvParams {
             throw new RuntimeException(e);
         }
 
-        String spotUrl = properties.getProperty("binance.spot-url");
-        String futUrl = properties.getProperty("binance.fut-url");
-        String streamSpotUrl = properties.getProperty("binance.stream.spot-url");
-        String streamFutUrl = properties.getProperty("binance.stream.fut-url");
+        SPOT_URL = properties.getProperty("binance.spot-url");
+        FUT_URL = properties.getProperty("binance.fut-url");
+        STREAM_SPOT_URL = properties.getProperty("binance.stream.spot-url");
+        STREAM_FUT_URL = properties.getProperty("binance.stream.fut-url");
 
-        Boolean isUSLocation = Boolean.getBoolean(properties.getProperty("location-us"));
-        if (isUSLocation) {
-            spotUrl = spotUrl.replace("binance.com", "binance.us");
-            futUrl = futUrl.replace("binance.com", "binance.us");
-            streamSpotUrl = streamSpotUrl.replace("binance.com", "binance.us");
-            streamFutUrl = streamFutUrl.replace("binance.com", "binance.us");
-        }
-
-        SPOT_URL = spotUrl;
-        FUT_URL = futUrl;
-        STREAM_SPOT_URL = streamSpotUrl;
-        STREAM_FUT_URL = streamFutUrl;
-
+        String chunkSize = properties.getProperty("chunk-size");
         String cupSize = properties.getProperty("cup-size");
         String maxIncline = properties.getProperty("max-incline");
 
+        CHUNK_SIZE = Integer.parseInt(chunkSize);
         CUP_SIZE = Integer.parseInt(cupSize);
         MAX_INCLINE = Integer.parseInt(maxIncline);
         FUT_SIGN = properties.getProperty("fut-sign");

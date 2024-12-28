@@ -1,27 +1,16 @@
 package dev.abu.screener_backend.handlers;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.abu.screener_backend.analysis.DensityAnalyzer;
 import dev.abu.screener_backend.analysis.OrderBookStream;
-import dev.abu.screener_backend.binance.TickerService;
+import dev.abu.screener_backend.binance.WSDepthClient;
 import dev.abu.screener_backend.entity.Trade;
-import dev.abu.screener_backend.rabbitmq.RabbitMQService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.core.Message;
-import org.springframework.amqp.core.MessageListener;
-import org.springframework.amqp.rabbit.listener.DirectMessageListenerContainer;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
 import java.io.IOException;
-import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.TreeSet;
 
-import static dev.abu.screener_backend.utils.EnvParams.CUP_SIZE;
-import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 import static dev.abu.screener_backend.utils.RequestUtilities.getQueryParams;
 
 @Slf4j
@@ -34,78 +23,44 @@ public class ClientSession {
             """;
 
     private final WebSocketSession session;
-    private final TickerService tickerService;
-    private DensityAnalyzer densityAnalyzer;
-    private DirectMessageListenerContainer container;
-    private String symbol;
-    private boolean isOpen;
-    private int lowBound = -10;
-    private int highBound = 10;
+    private final HashSet<String> symbols = new HashSet<>();
 
-    public static void startClientSession(WebSocketSession session, RabbitMQService rabbitMQService, TickerService tickerService) {
-        new ClientSession(session, rabbitMQService, tickerService);
+    public static ClientSession startClientSession(WebSocketSession session) {
+        return new ClientSession(session);
     }
 
-    private ClientSession(WebSocketSession session, RabbitMQService rabbitMQService, TickerService tickerService) {
+    private ClientSession(WebSocketSession session) {
         this.session = session;
-        this.tickerService = tickerService;
-        boolean isSuccess = setSymbol();
-        if (!isSuccess) {
+        String[] queues = getQueues();
+        if (queues == null) {
             sendMessage(INVALID_SYMBOL_MESSAGE);
             closeSession();
             return;
         }
-        densityAnalyzer = DensityAnalyzer.getDensityAnalyzer(symbol);
-        setQueryParams();
-        var stream = OrderBookStream.getInstance(symbol);
-        isOpen = true;
-        broadCastData(stream.getBids(), stream.getAsks());
-        container = rabbitMQService.createConsumer(listener(), symbol);
-        log.info("Client session created - {}", this);
+        log.info("Client session created for symbols {}", symbols);
     }
 
-    @Override
-    public String toString() {
-        return "ClientSession{" +
-                "symbol='" + symbol + '\'' +
-                ", lowBound=" + lowBound +
-                ", highBound=" + highBound +
-                '}';
+    public boolean isNotOpen() {
+        return !session.isOpen();
     }
 
-    public MessageListener listener() {
-        return (Message message) -> {
-            try {
-                ObjectMapper objectMapper = new ObjectMapper();
-                Map<String, Map<Integer, TreeSet<Trade>>> data =
-                        objectMapper.readValue(message.getBody(), new TypeReference<>() {});
-                var bids = data.get("bids");
-                var asks = data.get("asks");
-                if (session.isOpen()) {
-                    broadCastData(bids, asks);
-                }
-            } catch (Exception e) {
-                log.error("Couldn't send message to {}", session, e);
-            }
-        };
+    public void sendData() {
+        for (String symbol : symbols) {
+            OrderBookStream stream = OrderBookStream.getInstance(symbol);
+            broadCastData(symbol, stream.getBids(), stream.getAsks());
+        }
     }
 
-    public void broadCastData(
-            Map<Integer, TreeSet<Trade>> bids,
-            Map<Integer, TreeSet<Trade>> asks
-    ) {
+    private void broadCastData(String symbol, List<Trade> bids, List<Trade> asks) {
         try {
-            var bidsList = getTrades(bids);
-            var asksList = getTrades(asks);
-
-            if (!isOpen) return;
+            if (!session.isOpen()) return;
             String message = String.format("""
                     {
                     "symbol": "%s",
                     "b": %s,
                     "a": %s
                     }
-                    """, symbol, bidsList, asksList);
+                    """, symbol, bids, asks);
             sendMessage(message);
         } catch (Exception e) {
             log.error("{} - Couldn't broadcast data: {}", symbol, e.getMessage());
@@ -114,10 +69,6 @@ public class ClientSession {
     }
 
     public void closeSession() {
-        isOpen = false;
-        if (container != null && container.isRunning()) {
-            container.stop();
-        }
         if (session.isOpen()) {
             try {
                 session.close();
@@ -128,59 +79,19 @@ public class ClientSession {
         log.info("Closed session for: {}", session.getId());
     }
 
-    private List<Trade> getTrades(Map<Integer, TreeSet<Trade>> tradeMap) {
-        int lowLever = getLevel(lowBound);
-        int highLever = getLevel(highBound);
-
-        List<Trade> tradeList =
-                tradeMap.entrySet().stream()
-                        .filter(entry -> entry.getKey() >= lowLever && entry.getKey() <= highLever)
-                        .flatMap(entry -> entry.getValue().stream())
-                        .peek(trade -> trade.setDensity(densityAnalyzer.getDensity(trade.getQuantity())))
-                        .sorted().toList();
-
-        return new ArrayList<>(tradeList.subList(Math.max(tradeList.size() - CUP_SIZE, 0), tradeList.size()));
-    }
-
-    private int getLevel(double incline) {
-        int n = (int) incline;
-        int ost = n % 5;
-        if (n == 0 || ost == 0) return n;
-        int level;
-        if (n > 0) {
-            level = n + (5 - ost);
-        } else {
-            level = n - (5 + ost);
-        }
-        return level;
-    }
-
-    private void setQueryParams() {
+    private String[] getQueues() {
         var queryParamsMap = getQueryParams(session);
-
-        if (queryParamsMap.containsKey("L")) {
-            lowBound = Integer.parseInt(queryParamsMap.get("L"));
+        String symbolsStr = queryParamsMap.get("symbols");
+        if (symbolsStr == null || symbolsStr.isEmpty()) return null;
+        String[] symbols = symbolsStr.split("/");
+        HashSet<String> queues = new HashSet<>();
+        for (String symbol : symbols) {
+            this.symbols.add(symbol.trim().toLowerCase());
+            String queue = WSDepthClient.getQueue(symbol);
+            if (queue == null) return null;
+            queues.add(queue);
         }
-
-        if (queryParamsMap.containsKey("H")) {
-            highBound = Integer.parseInt(queryParamsMap.get("H"));
-        }
-    }
-
-    private boolean setSymbol() {
-        var queryParamsMap = getQueryParams(session);
-        String providedSymbol = queryParamsMap.get("symbol");
-        if (providedSymbol == null || providedSymbol.isEmpty()) {
-            return false;
-        }
-
-        List<String> savedSymbols = tickerService.getAllSymbols();
-        if (!savedSymbols.contains(providedSymbol.replace(FUT_SIGN, ""))) {
-            return false;
-        }
-
-        symbol = providedSymbol;
-        return true;
+        return queues.toArray(new String[0]);
     }
 
     private void sendMessage(String message) {

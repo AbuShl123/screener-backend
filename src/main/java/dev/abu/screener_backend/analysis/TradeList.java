@@ -31,12 +31,12 @@ public class TradeList {
         asks.forEach((key, value) -> value.clear());
     }
 
-    boolean addTrade(String price, double qty, double incline, boolean isAsk, long timestamp) {
+    void addTrade(String price, double qty, double incline, boolean isAsk, long timestamp) {
         int level = getLevel(incline);
         if (isAsk) {
-            return addTrade(asks.get(level), price, qty, incline, timestamp);
+            addTrade(asks.get(level), price, qty, incline, timestamp);
         } else {
-            return addTrade(bids.get(level), price, qty, incline, timestamp);
+            addTrade(bids.get(level), price, qty, incline, timestamp);
         }
     }
 

@@ -48,14 +48,13 @@ public class DensityAnalyzer {
         return 3;
     }
 
-    public boolean analyzeDensities(double[] dataSet) {
+    public void analyzeDensities(double[] dataSet) {
         int mean = calculateMean(dataSet);
         int digits = mean == 0 ? 1 : (int) Math.pow(10, getNumOfDigits(mean));
 
         firstLevel.set(digits * 1.0);
         secondLevel.set(digits * 10.0);
         thirdLevel.set(digits * 100.0);
-        return true;
     }
 
     private int calculateMean(double[] dataSet) {
