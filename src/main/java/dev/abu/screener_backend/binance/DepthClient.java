@@ -15,7 +15,7 @@ public class DepthClient {
     private static int weightUserPerMinute = 0;
 
     public synchronized static String getDepthSnapshot(String symbol, boolean isSpot) {
-        if (weightUserPerMinute >= 5800) {
+        if (weightUserPerMinute >= 5200) {
             int secondsToWait = 60 - LocalTime.now().getSecond();
             log.info("Request weight is {}. Waiting for {} seconds", weightUserPerMinute, secondsToWait);
             try {
@@ -35,7 +35,7 @@ public class DepthClient {
         Response response = given()
                 .baseUri(baseUri)
                 .param("symbol", symbol.toUpperCase())
-                .param("limit", 1000)
+                .param("limit", ( isSpot ? 5000 : 1000 ))
                 .when()
                 .get("/depth")
                 .then()

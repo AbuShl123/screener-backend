@@ -5,6 +5,7 @@ import lombok.Getter;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeSet;
 
 import static dev.abu.screener_backend.utils.EnvParams.CUP_SIZE;
@@ -15,6 +16,8 @@ public class TradeList {
     private final Map<Integer, TreeSet<Trade>> bids = new HashMap<>();
     private final Map<Integer, TreeSet<Trade>> asks = new HashMap<>();
     private final String symbol;
+
+    private long lastUpdateTime = System.currentTimeMillis();
 
     TradeList(String symbol) {
         this.symbol = symbol;
@@ -38,6 +41,7 @@ public class TradeList {
         } else {
             addTrade(bids.get(level), price, qty, incline, timestamp);
         }
+        updateDensities();
     }
 
     private boolean addTrade(TreeSet<Trade> orderBook, String price, double qty, double incline, long timestamp) {
@@ -54,9 +58,11 @@ public class TradeList {
             }
         }
 
+        int density = DensityAnalyzer.getDensityAnalyzer(symbol).getDensity(qty);
+
         // case when there are not enough trades in the order book
         if (orderBook.isEmpty() || orderBook.size() < CUP_SIZE) {
-            orderBook.add(new Trade(price, qty, incline, timestamp));
+            orderBook.add(new Trade(price, qty, incline, density, timestamp));
             return true;
         }
 
@@ -64,7 +70,7 @@ public class TradeList {
         if (orderBook.first().getQuantity() > qty) return false;
 
         // otherwise, we will add this trade
-        orderBook.add(new Trade(price, qty, incline, timestamp));
+        orderBook.add(new Trade(price, qty, incline, density, timestamp));
 
         // making sure that size won't exceed the given cup size
         if (orderBook.size() > CUP_SIZE) {
@@ -72,6 +78,14 @@ public class TradeList {
         }
 
         return true;
+    }
+
+    private void updateDensities() {
+        if (System.currentTimeMillis() - lastUpdateTime < 10_000) return;
+        lastUpdateTime = System.currentTimeMillis();
+        final var analyzer = DensityAnalyzer.getDensityAnalyzer(symbol);
+        bids.values().stream().flatMap(Set::stream).forEach(t -> t.setDensity(analyzer.getDensity(t.getQuantity())));
+        asks.values().stream().flatMap(Set::stream).forEach(t -> t.setDensity(analyzer.getDensity(t.getQuantity())));
     }
 
     private int getLevel(double incline) {

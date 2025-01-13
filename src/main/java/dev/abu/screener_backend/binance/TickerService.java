@@ -15,15 +15,15 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static dev.abu.screener_backend.binance.ExchangeInfoClient.getExchangeInfo;
+import static dev.abu.screener_backend.binance.TickerClient.setPrices;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class TickerService {
 
     public static final String[] popularTickers = {
             "bnxusdt",
-//            "shibusdt",
+            "shibusdt",
             "avaxusdt",
             "trxusdt",
             "usdcusdt",
@@ -38,6 +38,12 @@ public class TickerService {
 
     /** JPA Ticker Repository to interact with a Database */
     private final TickerRepository tickerRepository;
+
+    public TickerService(TickerRepository tickerRepository) {
+        this.tickerRepository = tickerRepository;
+        setAllTickers();
+        setPrices(getAllSymbols());
+    }
 
     /**
      * @return {@link List<String>} containing all current symbols as {@link String} objects.

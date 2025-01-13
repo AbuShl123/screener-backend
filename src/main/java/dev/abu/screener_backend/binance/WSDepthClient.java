@@ -13,8 +13,8 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.io.IOException;
+import java.util.Arrays;
 
 import static dev.abu.screener_backend.utils.EnvParams.*;
 
@@ -22,32 +22,37 @@ import static dev.abu.screener_backend.utils.EnvParams.*;
 @Slf4j
 public class WSDepthClient extends WSBinanceClient {
 
-    private final static Map<String, String> depthMap = new ConcurrentHashMap<>();
+    private WebSocketSession session;
     private final ObjectMapper mapper = new ObjectMapper();
     private final boolean isSpot;
-    private final String queue;
-    private final String[] symbols;
+    private String[] symbols;
     private int counter;
 
-    public WSDepthClient(boolean isSpot, String depth, String... symbols) {
-        super("Order Book " + (isSpot ? "Spot" : "Futures") + " [" + depth + "]");
+    public WSDepthClient(boolean isSpot, String... symbols) {
+        super("Order Book " + (isSpot ? "Spot" : "Futures") + " " + Arrays.toString(symbols));
         this.isSpot = isSpot;
-        this.queue = depth;
         this.symbols = symbols;
         this.counter = 0;
-        setDepthMap();
+        setLocalOrderBook();
         setWsUrl(symbols);
         startWebSocket();
     }
 
-    public static String getQueue(String symbol) {
-        return depthMap.get(symbol);
+    public void closeConnection() {
+        try {
+            for (String symbol : symbols) {
+                OrderBookStream.getInstance(symbol).reset();
+                LocalOrderBook.getInstance(symbol).reset();
+            }
+            session.close();
+        } catch (IOException e) {
+            log.error("Failed to close websocket connection {}", e.getMessage());
+        }
     }
 
-    private void setDepthMap() {
+    private void setLocalOrderBook() {
         for (String symbol : symbols) {
             String s = isSpot ? symbol : symbol + FUT_SIGN;
-            depthMap.put(s, queue);
             OrderBookStream.createInstance(s);
             LocalOrderBook.createInstance(s, isSpot);
         }
@@ -72,6 +77,7 @@ public class WSDepthClient extends WSBinanceClient {
 
         @Override
         public void afterConnectionEstablished(@NonNull WebSocketSession session) {
+            WSDepthClient.this.session = session;
             log.info("Connected to {}: {} - {}", websocketName, session.getId(), wsUrl);
         }
 
@@ -100,15 +106,7 @@ public class WSDepthClient extends WSBinanceClient {
 
         @Override
         public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
-            log.info("Disconnected from {} (symbols={}) : reason = {}", websocketName, symbols, status.getReason());
-            reconnect();
-            reSyncLocalOrderBooks();
-        }
-    }
-
-    private void reSyncLocalOrderBooks() {
-        for (String symbol : symbols) {
-            LocalOrderBook.getInstance(symbol).reSyncOrderBook();
+            log.info("Disconnected from {} : reason = {}", websocketName, status.getReason());
         }
     }
 

@@ -31,17 +31,16 @@ public class OrderBookStream {
         this.densityAnalyzer = DensityAnalyzer.getDensityAnalyzer(symbol);
     }
 
-    public static synchronized OrderBookStream createInstance(String symbol) {
+    public static synchronized void createInstance(String symbol) {
         var stream = new OrderBookStream(symbol);
         streams.put(symbol, stream);
-        return stream;
     }
 
     public static synchronized OrderBookStream getInstance(String symbol) {
         return streams.get(symbol);
     }
 
-    public void clear() {
+    public void reset() {
         orderBook.clear();
     }
 

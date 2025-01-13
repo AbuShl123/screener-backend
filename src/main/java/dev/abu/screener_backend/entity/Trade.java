@@ -21,10 +21,6 @@ public class Trade implements Comparable<Trade>, Serializable {
     private int density;
     private long life;
 
-    public Trade(String price, double quantity, double incline, long life) {
-        this(price, quantity, incline, 0, life);
-    }
-
     @Override
     public int compareTo(Trade another) {
         double qty1 = getQuantity();
@@ -53,7 +49,7 @@ public class Trade implements Comparable<Trade>, Serializable {
                 %d
                 ]""",
 
-                price, quantity, abs(incline), density, life
+                price, quantity, incline, density, life
         );
     }
 }

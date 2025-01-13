@@ -42,6 +42,13 @@ public class LocalOrderBook {
         this.stream = OrderBookStream.getInstance(symbol);
     }
 
+    public void reset() {
+        this.reSync = true;
+        this.initialEvent = false;
+        this.lastUpdateID = 0;
+        this.lastReSyncTime = 0;
+    }
+
     public synchronized void process(String rawData) throws JsonProcessingException {
         JsonNode event = mapper.readTree(rawData).get("data");
         String eventType = event.get("e").asText();
@@ -112,7 +119,7 @@ public class LocalOrderBook {
             lastUpdateID = snapshot.get("lastUpdateId").asLong();
         } while (lastUpdateID < U);
 
-        stream.clear();
+        stream.reset();
         stream.buffer(depthSnapshot);
         reSync = false;
         initialEvent = true;

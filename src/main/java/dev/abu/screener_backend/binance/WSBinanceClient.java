@@ -21,7 +21,7 @@ public abstract class WSBinanceClient {
 
     protected abstract void setWsUrl(String... symbols);
 
-    protected void startWebSocket() {
+    public void startWebSocket() {
         WebSocketContainer container = ContainerProvider.getWebSocketContainer();
         // Set max message buffer size (10MB)
         container.setDefaultMaxTextMessageBufferSize(10 * 1024 * 1024);
@@ -29,7 +29,7 @@ public abstract class WSBinanceClient {
         client.execute(getWebSocketHandler(), this.wsUrl);
     }
 
-    protected void reconnect() {
+    public void reconnect() {
         log.info("Attempting reconnection for {}", websocketName);
         client.execute(getWebSocketHandler(), this.wsUrl);
     }
