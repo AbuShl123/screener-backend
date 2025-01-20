@@ -79,9 +79,8 @@ public class SessionPool {
     }
 
     public void closeUnusedWSConnections() {
-        List<String> popularSymbols = Arrays.asList(popularTickers);
         wsClients.entrySet().removeIf(entry -> {
-            if (!symbols.contains(entry.getKey()) && !popularSymbols.contains(entry.getKey())) {
+            if (!symbols.contains(entry.getKey())) {
                 entry.getValue().closeConnection();
                 return true;
             }
@@ -91,7 +90,6 @@ public class SessionPool {
 
     private void broadCastData(WebSocketSession session, String symbol, List<Trade> bids, List<Trade> asks) {
         try {
-            if (!session.isOpen()) return;
             String message = String.format("""
                     {
                     "symbol": "%s",
@@ -107,9 +105,10 @@ public class SessionPool {
 
     private void sendMessage(WebSocketSession session, String message) {
         try {
+            if (!session.isOpen()) return;
             session.sendMessage(new TextMessage(message));
         } catch (IOException e) {
-            log.error("Couldn't send a message - {}.", message, e);
+            log.error("Couldn't send a message - {} - {}", message, e.getMessage());
         }
     }
 

@@ -17,6 +17,7 @@ import java.io.IOException;
 public class WSOrderBookHandler extends TextWebSocketHandler {
 
     private final SessionPool sessionPool;
+    private long lastUpdateTime;
 
     @Override
     public synchronized void afterConnectionEstablished(@NonNull WebSocketSession session) throws IOException {
@@ -32,10 +33,10 @@ public class WSOrderBookHandler extends TextWebSocketHandler {
     public void sendUpdates() {
         sessionPool.clearClosedSessions();
         sessionPool.sendData();
-    }
 
-    @Scheduled(fixedRate = 60_000)
-    public void checkWSConnections() {
-        sessionPool.closeUnusedWSConnections();
+        if (System.currentTimeMillis() - lastUpdateTime > 300_000) {
+            lastUpdateTime = System.currentTimeMillis();
+            sessionPool.closeUnusedWSConnections();
+        }
     }
 }

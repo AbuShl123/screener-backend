@@ -22,17 +22,22 @@ public class DensityAnalyzer {
     }
 
     @Getter
-    private final AtomicReference<Double> firstLevel = new AtomicReference<>(0.0);
+    private final AtomicReference<Double> firstLevel = new AtomicReference<>(-1.0);
     @Getter
-    private final AtomicReference<Double> secondLevel = new AtomicReference<>(0.0);
+    private final AtomicReference<Double> secondLevel = new AtomicReference<>(-1.0);
     @Getter
-    private final AtomicReference<Double> thirdLevel = new AtomicReference<>(0.0);
+    private final AtomicReference<Double> thirdLevel = new AtomicReference<>(-1.0);
 
     private DensityAnalyzer(String symbol) {
         this.symbol = symbol;
     }
 
     public synchronized int getDensity(double data) {
+
+        if (firstLevel.get() == -1 || secondLevel.get() == -1 || thirdLevel.get() == -1) {
+            return 0;
+        }
+
         if (data < firstLevel.get()) {
             return 0;
         }

@@ -39,6 +39,7 @@ public class BitgetOpenInterestService {
 
     @Scheduled(fixedRate = UPDATE_INTERVAL, initialDelay = 5_000)
     private void checkInterestChange() {
+        long before = System.currentTimeMillis();
         for (String symbol : symbols) {
             Double currentInterest = fetchOpenInterest(symbol);
             if (currentInterest == null) continue;
@@ -69,17 +70,19 @@ public class BitgetOpenInterestService {
                 websocket.broadCastData(String.format(payload, symbolName, deltaPercentage, deltaCoins, deltaDollars, timestamp));
             }
         }
+        log.info("finished iterating oi in {} seconds", (System.currentTimeMillis() - before) / 1000);
     }
 
     public Double fetchOpenInterest(String symbol) {
+        String payload = null;
         try {
-            String payload = getOpenInterest(symbol);
+            payload = getOpenInterest(symbol);
             JsonNode json = mapper.readTree(payload);
             JsonNode data = json.get("data");
             if (data == null) return null;
             return data.get("amount").asDouble();
         } catch (Exception e) {
-            log.error("Failed to fetch open interest data", e);
+            log.error("Failed to fetch open interest data - {} ", payload, e);
             return null;
         }
     }

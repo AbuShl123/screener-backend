@@ -1,7 +1,6 @@
 package dev.abu.screener_backend.config;
 
 
-import dev.abu.screener_backend.registration.RestAuthenticationFailureHandler;
 import lombok.AllArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

@@ -41,11 +41,13 @@ public class WSDepthClient extends WSBinanceClient {
     public void closeConnection() {
         try {
             for (String symbol : symbols) {
-                OrderBookStream.getInstance(symbol).reset();
-                LocalOrderBook.getInstance(symbol).reset();
+                var stream = OrderBookStream.getInstance(symbol);
+                var orderbook = LocalOrderBook.getInstance(symbol);
+                if (stream != null) stream.reset();
+                if (orderbook != null) orderbook.reset();
             }
             session.close();
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.error("Failed to close websocket connection {}", e.getMessage());
         }
     }
@@ -107,6 +109,9 @@ public class WSDepthClient extends WSBinanceClient {
         @Override
         public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
             log.info("Disconnected from {} : reason = {}", websocketName, status.getReason());
+            if (status.getReason() != null) {
+                reconnect();
+            }
         }
     }
 
