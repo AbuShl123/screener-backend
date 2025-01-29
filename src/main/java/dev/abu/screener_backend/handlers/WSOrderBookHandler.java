@@ -26,7 +26,7 @@ public class WSOrderBookHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
-        log.info("Client session closed: {}", session.getId());
+        log.info("Order book client session closed: {} - {}", session.getId(), status);
     }
 
     @Scheduled(fixedRate = 1000)
@@ -34,7 +34,7 @@ public class WSOrderBookHandler extends TextWebSocketHandler {
         sessionPool.clearClosedSessions();
         sessionPool.sendData();
 
-        if (System.currentTimeMillis() - lastUpdateTime > 300_000) {
+        if (System.currentTimeMillis() - lastUpdateTime > 10_000) {
             lastUpdateTime = System.currentTimeMillis();
             sessionPool.closeUnusedWSConnections();
         }

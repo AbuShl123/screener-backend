@@ -51,12 +51,13 @@ public class SessionPool {
             return;
         }
         sessions.add(session);
-        log.info("Client session created for symbols {}", symbolsMap.get(session));
+        log.info("Order book client session created for symbols {}", symbolsMap.get(session));
     }
 
     public void sendData() {
         Set<String> symbols = new HashSet<>(this.symbols); // to avoid concurrent modification exception
         Set<WebSocketSession> sessions = new HashSet<>(this.sessions);
+
         for (String symbol : symbols) {
             OrderBookStream stream = OrderBookStream.getInstance(symbol);
             if (stream == null) return;
