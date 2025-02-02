@@ -34,7 +34,7 @@ public class WSOrderBookHandler extends TextWebSocketHandler {
         sessionPool.clearClosedSessions();
         sessionPool.sendData();
 
-        if (System.currentTimeMillis() - lastUpdateTime > 10_000) {
+        if (System.currentTimeMillis() - lastUpdateTime > 30_000) {
             lastUpdateTime = System.currentTimeMillis();
             sessionPool.closeUnusedWSConnections();
         }

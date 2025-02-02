@@ -1,6 +1,7 @@
 ### other ###
 data.json
 /logs/
+src/main/resources/application.properties
 
 ### maven ###
 HELP.md

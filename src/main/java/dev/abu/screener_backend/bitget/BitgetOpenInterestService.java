@@ -20,7 +20,7 @@ import static java.lang.Math.abs;
 @Service
 public class BitgetOpenInterestService {
 
-    private static final long UPDATE_INTERVAL = 5 * 60 * 1000;
+    private static final long UPDATE_INTERVAL = 2 * 60 * 1000;
     private static final double INTEREST_THRESHOLD = 5.00;
 
     private final ObjectMapper mapper;
