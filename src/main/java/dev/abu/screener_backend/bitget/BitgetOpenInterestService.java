@@ -41,17 +41,21 @@ public class BitgetOpenInterestService {
     private void checkInterestChange() {
         long before = System.currentTimeMillis();
         for (String symbol : symbols) {
+            // get current OI for the symbol
             Double currentInterest = fetchOpenInterest(symbol);
             if (currentInterest == null) continue;
 
+            // get previous OI for the symbol
             Double pastInterest = pastInterests.get(symbol);
             if (pastInterest == null) {
-                pastInterests.put(symbol, currentInterest);
+                pastInterests.put(symbol, currentInterest); // this happens only once ideally in the very beginning.
                 continue;
             }
 
+            // calculate how much the OI dropped/rose from the last time
             double deltaPercentage = ((currentInterest - pastInterest) / pastInterest) * 100;
 
+            // if the delta to above the 5%, then broadcast it.
             if (abs(deltaPercentage) > INTEREST_THRESHOLD) {
                 double deltaCoins = currentInterest - pastInterest;
                 String symbolName = symbol.replace("_UMCBL", "");
@@ -69,6 +73,9 @@ public class BitgetOpenInterestService {
                         """;
                 websocket.broadCastData(String.format(payload, symbolName, deltaPercentage, deltaCoins, deltaDollars, timestamp));
             }
+
+            // update the past interest with the current OI
+            pastInterests.put(symbol, currentInterest);
         }
         log.info("finished iterating oi in {} seconds", (System.currentTimeMillis() - before) / 1000);
     }
