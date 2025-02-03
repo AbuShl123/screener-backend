@@ -56,7 +56,7 @@ public class BitgetOpenInterestService {
             double deltaPercentage = ((currentInterest - pastInterest) / pastInterest) * 100;
 
             // if the delta to above the 5%, then broadcast it.
-            if (abs(deltaPercentage) > INTEREST_THRESHOLD) {
+            if (deltaPercentage > INTEREST_THRESHOLD) {
                 double deltaCoins = currentInterest - pastInterest;
                 String symbolName = symbol.replace("_UMCBL", "");
                 long timestamp = System.currentTimeMillis();
