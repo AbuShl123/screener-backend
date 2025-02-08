@@ -7,10 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static io.restassured.RestAssured.given;
 import static java.lang.Double.NaN;
@@ -19,7 +16,7 @@ import static java.lang.Double.NaN;
 @Service
 public class BitgetOpenInterestService {
 
-    private static final long UPDATE_INTERVAL = 2 * 60 * 1000;
+    private static final long UPDATE_INTERVAL = 5 * 60 * 1000;
     private static final double INTEREST_THRESHOLD = 5.00;
 
     private final ObjectMapper mapper;
@@ -67,6 +64,8 @@ public class BitgetOpenInterestService {
 
             // calculate how much the OI dropped/rose from the last time
             double deltaPercentage = ((currentInterest - pastInterest) / pastInterest) * 100;
+            log.info("{} --- c = {}, p = {}, i = {} --- {}",
+                    symbol, pastInterest, currentInterest, deltaPercentage, ( deltaPercentage > INTEREST_THRESHOLD ? "HIGH" : "LOW"));
 
             // if the delta to above the 5%, then broadcast it.
             if (deltaPercentage > INTEREST_THRESHOLD) {
@@ -136,7 +135,8 @@ public class BitgetOpenInterestService {
                 symbols.add(symbol);
             }
 
-            log.info("All {} Bitget symbols are set.", symbols.size());
+            log.debug("All {} Bitget symbols are set.", symbols.size());
+            log.debug("Here is a list of Bitget symbols that will be analyzed: {}", symbols);
         } catch (Exception e) {
             log.error("Failed to load all Bitget symbols", e);
         }
