@@ -3,8 +3,8 @@ package dev.abu.screener_backend.binance;
 import jakarta.websocket.ContainerProvider;
 import jakarta.websocket.WebSocketContainer;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
-import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 @Slf4j
 public abstract class WSBinanceClient {
@@ -17,9 +17,7 @@ public abstract class WSBinanceClient {
         this.websocketName = websocketName;
     }
 
-    protected abstract TextWebSocketHandler getWebSocketHandler();
-
-    protected abstract void setWsUrl(String... symbols);
+    protected abstract WebSocketHandler getWebSocketHandler();
 
     public void startWebSocket() {
         WebSocketContainer container = ContainerProvider.getWebSocketContainer();
@@ -32,5 +30,9 @@ public abstract class WSBinanceClient {
     public void reconnect() {
         log.info("Attempting reconnection for {}", websocketName);
         client.execute(getWebSocketHandler(), this.wsUrl);
+    }
+
+    public String getName() {
+        return websocketName;
     }
 }

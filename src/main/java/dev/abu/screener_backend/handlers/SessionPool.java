@@ -79,16 +79,6 @@ public class SessionPool {
         symbols.removeIf(symbol -> !flatSymbols.contains(symbol));
     }
 
-    public void closeUnusedWSConnections() {
-        wsClients.entrySet().removeIf(entry -> {
-            if (!symbols.contains(entry.getKey())) {
-                entry.getValue().closeConnection();
-                return true;
-            }
-            return false;
-        });
-    }
-
     private void broadCastData(WebSocketSession session, String symbol, List<Trade> bids, List<Trade> asks) {
         try {
             String message = String.format("""
@@ -123,7 +113,7 @@ public class SessionPool {
         for (String s : arr) {
             String symbol = s.trim().toLowerCase();
             if (!isValidSymbol(symbol)) return false;
-            checkWSConnection(symbol);
+//            checkWSConnection(symbol);
             set.add(symbol);
         }
 
@@ -140,12 +130,5 @@ public class SessionPool {
         } else {
             return spotSymbols.contains(symbol);
         }
-    }
-
-    private void checkWSConnection(String symbol) {
-        if (symbols.contains(symbol)) return;
-        boolean isSpot = !symbol.endsWith(FUT_SIGN);
-        String rawSymbol = symbol.replace(FUT_SIGN, "");
-        if (!wsClients.containsKey(symbol)) wsClients.put(symbol, new WSDepthClient(isSpot, rawSymbol));
     }
 }

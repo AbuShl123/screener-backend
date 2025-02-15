@@ -8,7 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.HashMap;
 import java.util.Map;
 
-import static dev.abu.screener_backend.binance.DepthClient.getDepthSnapshot;
+import static dev.abu.screener_backend.binance.DepthClient.getInitialSnapshot;
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
 @Slf4j
@@ -114,7 +114,7 @@ public class LocalOrderBook {
 
         do {
             String ticker = symbol.replace(FUT_SIGN, "");
-            depthSnapshot = getDepthSnapshot(ticker, isSpot);
+            depthSnapshot = getInitialSnapshot(ticker, isSpot);
             JsonNode snapshot = mapper.readTree(depthSnapshot);
             lastUpdateID = snapshot.get("lastUpdateId").asLong();
         } while (lastUpdateID < U);

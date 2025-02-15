@@ -4,17 +4,22 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.http.HttpEntity;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import static dev.abu.screener_backend.utils.EnvParams.SPOT_URL;
-import static io.restassured.RestAssured.given;
 
 @Slf4j
 public class TickerClient {
 
+    private static final CloseableHttpClient httpClient = HttpClients.createDefault();
     private static final Map<String, Double> prices = new HashMap<>();
     private static final ObjectMapper mapper = new ObjectMapper();
 
@@ -48,11 +53,18 @@ public class TickerClient {
     }
 
     private static String getData() {
-        return
-                given().baseUri(SPOT_URL)
-                        .when()
-                        .get("/ticker/price")
-                        .then()
-                        .extract().response().asPrettyString();
+        HttpGet tickerRequest = new HttpGet(SPOT_URL + "/ticker/price");
+        tickerRequest.addHeader("Accept", "application/json");
+
+        try (var response = httpClient.execute(tickerRequest)) {
+            HttpEntity entity = response.getEntity();
+            if (entity != null) {
+                return EntityUtils.toString(entity);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to get send request for depth snapshot: " + e.getMessage());
+        }
+
+        return null;
     }
 }

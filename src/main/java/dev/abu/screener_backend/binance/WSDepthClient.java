@@ -1,76 +1,41 @@
 package dev.abu.screener_backend.binance;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.abu.screener_backend.analysis.LocalOrderBook;
-import dev.abu.screener_backend.analysis.OrderBookStream;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
 import org.springframework.web.socket.CloseStatus;
-import org.springframework.web.socket.TextMessage;
+import org.springframework.web.socket.WebSocketHandler;
+import org.springframework.web.socket.WebSocketMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
-import java.util.Arrays;
-
-import static dev.abu.screener_backend.utils.EnvParams.*;
+import java.util.HashMap;
+import java.util.Map;
 
 @Setter
 @Slf4j
 public class WSDepthClient extends WSBinanceClient {
 
-    private WebSocketSession session;
+    private static int totalEventCount = 0;
+    private static long lastCountUpdate = System.currentTimeMillis();
+    private static final Map<String, OrderBook> orderBooks = new HashMap<>();
+
     private final ObjectMapper mapper = new ObjectMapper();
     private final boolean isSpot;
-    private String[] symbols;
-    private int counter;
 
-    public WSDepthClient(boolean isSpot, String... symbols) {
-        super("Order Book " + (isSpot ? "Spot" : "Futures") + " " + Arrays.toString(symbols));
+    public WSDepthClient(String name, String url, boolean isSpot, String... symbols) {
+        super(name);
         this.isSpot = isSpot;
-        this.symbols = symbols;
-        this.counter = 0;
-        setLocalOrderBook();
-        setWsUrl(symbols);
-        startWebSocket();
-    }
-
-    public void closeConnection() {
-        try {
-            for (String symbol : symbols) {
-                var stream = OrderBookStream.getInstance(symbol);
-                var orderbook = LocalOrderBook.getInstance(symbol);
-                if (stream != null) stream.reset();
-                if (orderbook != null) orderbook.reset();
-            }
-            session.close();
-        } catch (Exception e) {
-            log.error("Failed to close websocket connection {}", e.getMessage());
-        }
-    }
-
-    private void setLocalOrderBook() {
+        this.wsUrl = url;
         for (String symbol : symbols) {
-            String s = isSpot ? symbol : symbol + FUT_SIGN;
-            OrderBookStream.createInstance(s);
-            LocalOrderBook.createInstance(s, isSpot);
+            orderBooks.putIfAbsent(symbol, new OrderBook(symbol, websocketName));
         }
-    }
-
-    protected void setWsUrl(String... symbols) {
-        String stream = isSpot ? "@depth/" : "@depth@500ms/";
-        StringBuilder path = new StringBuilder("stream?streams=");
-        for (String symbol : symbols) {
-            path.append(symbol.toLowerCase()).append(stream);
-        }
-        path.deleteCharAt(path.length() - 1);
-        this.wsUrl = (isSpot ? STREAM_SPOT_URL : STREAM_FUT_URL) + "/" + path;
     }
 
     @Override
-    protected TextWebSocketHandler getWebSocketHandler() {
+    protected WebSocketHandler getWebSocketHandler() {
         return new OrderBookHandler();
     }
 
@@ -78,26 +43,16 @@ public class WSDepthClient extends WSBinanceClient {
 
         @Override
         public void afterConnectionEstablished(@NonNull WebSocketSession session) {
-            WSDepthClient.this.session = session;
-            log.info("Connected to {}: {} - {}", websocketName, session.getId(), wsUrl);
+            log.info("{} websocket connection established", websocketName);
         }
 
         @Override
-        protected void handleTextMessage(@NonNull WebSocketSession session, @NonNull TextMessage message) throws JsonProcessingException {
-            String payload = message.getPayload();
-            String symbol = extractSymbol(payload);
-            if (symbol == null) return;
-            String stream = isSpot ? symbol : symbol + FUT_SIGN;
-            LocalOrderBook ob = LocalOrderBook.getInstance(stream);
-            if (counter == -1 || ob.isReSyncCompleted()) {
-                ob.process(payload);
-                return;
-            }
-
-            if (!symbol.equals(symbols[counter])) return;
-            ob.process(payload);
-            if (ob.isReSyncCompleted()) counter++;
-            if (counter >= symbols.length) counter = -1;
+        public void handleMessage(@NonNull WebSocketSession session, @NonNull WebSocketMessage<?> message) {
+            long start = System.nanoTime();
+            processMessage((String) message.getPayload());
+            analyzeEventCount();
+            long duration = (System.nanoTime() - start) / 1_000_000;
+            if (duration > 3) log.info("{} Processed event in {}ms", websocketName, duration);
         }
 
         @Override
@@ -107,20 +62,32 @@ public class WSDepthClient extends WSBinanceClient {
 
         @Override
         public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
-            log.info("Disconnected from {} : reason = {}", websocketName, status.getReason());
-            if (status.getReason() != null) {
+            log.info("Disconnected from {} with code {} and reason \"{}\"", websocketName, status.getCode(), status.getReason());
+            if (status.getReason() != null || status.getCode() == 1006) {
                 reconnect();
             }
         }
-    }
 
-    public String extractSymbol(String json) {
-        try {
-            JsonNode rootNode = mapper.readTree(json);
-            String streamValue = rootNode.get("stream").asText();
-            return streamValue.split("@")[0];
-        } catch (Exception e) {
-            return null;
+        private static synchronized void analyzeEventCount() {
+            totalEventCount++;
+            if (System.currentTimeMillis() - lastCountUpdate > 60_000) {
+                log.info("Total {} events processed in 1 minute", totalEventCount);
+                totalEventCount = 0;
+                lastCountUpdate = System.currentTimeMillis();
+            }
+        }
+
+        private void processMessage(String message) {
+            try {
+                JsonNode root = mapper.readTree(message);
+                JsonNode data = root.get("data");
+                JsonNode symbolNode = data.get("s");
+                if (symbolNode == null) return;
+                String symbol = symbolNode.asText().toLowerCase();
+                orderBooks.get(symbol).process(data);
+            } catch (Exception e) {
+                log.error("{} Failed to read json data - {}", websocketName, e.getMessage());
+            }
         }
     }
 }

@@ -64,7 +64,7 @@ public class BitgetOpenInterestService {
 
             // calculate how much the OI dropped/rose from the last time
             double deltaPercentage = ((currentInterest - pastInterest) / pastInterest) * 100;
-            log.info("{} --- c = {}, p = {}, i = {} --- {}",
+            log.debug("{} --- c = {}, p = {}, i = {} --- {}",
                     symbol, pastInterest, currentInterest, deltaPercentage, ( deltaPercentage > INTEREST_THRESHOLD ? "HIGH" : "LOW"));
 
             // if the delta to above the 5%, then broadcast it.
@@ -83,13 +83,15 @@ public class BitgetOpenInterestService {
                         "timestamp": %d
                         }
                         """;
-                websocket.broadCastData(String.format(payload, symbolName, deltaPercentage, deltaCoins, deltaDollars, timestamp));
+                String data = String.format(payload, symbolName, deltaPercentage, deltaCoins, deltaDollars, timestamp);
+                log.debug("broadcasting OI data: {}", data);
+                websocket.broadCastData(data);
             }
 
             // update the past interest with the current OI
             pastInterests.put(symbol, currentInterest);
         }
-        log.info("finished iterating oi in {} seconds", (System.currentTimeMillis() - before) / 1000);
+        log.debug("finished iterating oi in {} seconds", (System.currentTimeMillis() - before) / 1000);
     }
 
     public Double fetchOpenInterest(String symbol) {
@@ -135,8 +137,8 @@ public class BitgetOpenInterestService {
                 symbols.add(symbol);
             }
 
-            log.debug("All {} Bitget symbols are set.", symbols.size());
-            log.debug("Here is a list of Bitget symbols that will be analyzed: {}", symbols);
+            log.info("All {} Bitget symbols are set.", symbols.size());
+            log.info("Here is a list of Bitget symbols that will be analyzed: {}", symbols);
         } catch (Exception e) {
             log.error("Failed to load all Bitget symbols", e);
         }

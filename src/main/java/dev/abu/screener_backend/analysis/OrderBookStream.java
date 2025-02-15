@@ -25,15 +25,16 @@ public class OrderBookStream {
     private final HashSet<Double> quantitiesDataSet = new HashSet<>();
     private final DensityAnalyzer densityAnalyzer;
 
-    private OrderBookStream(String symbol) {
+    public OrderBookStream(String symbol) {
         this.symbol = symbol;
         this.orderBook = new TradeList(symbol);
         this.densityAnalyzer = DensityAnalyzer.getDensityAnalyzer(symbol);
     }
 
-    public static synchronized void createInstance(String symbol) {
+    public static synchronized OrderBookStream createInstance(String symbol) {
         var stream = new OrderBookStream(symbol);
         streams.put(symbol, stream);
+        return stream;
     }
 
     public static synchronized OrderBookStream getInstance(String symbol) {
@@ -62,10 +63,18 @@ public class OrderBookStream {
         }
     }
 
-    private long getTimeStamp(JsonNode json) {
-        JsonNode data = json.get("data");
-        if (data == null) return System.currentTimeMillis();
-        JsonNode eField = data.get("E");
+    public void analyze(JsonNode root, JsonNode asksArray, JsonNode bidsArray) {
+        long timestamp = getTimeStamp(root);
+
+        traverseArray(asksArray, timestamp, true);
+        traverseArray(bidsArray, timestamp, false);
+
+        densityAnalyzer.analyzeDensities(getQuantitiesDataSet());
+        quantitiesDataSet.clear();
+    }
+
+    private long getTimeStamp(JsonNode root) {
+        JsonNode eField = root.get("E");
         if (eField == null) return System.currentTimeMillis();
         long timestamp = eField.asLong();
         return timestamp == 0 ? System.currentTimeMillis() : timestamp;
