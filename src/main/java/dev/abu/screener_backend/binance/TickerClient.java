@@ -10,9 +10,9 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static dev.abu.screener_backend.utils.EnvParams.SPOT_URL;
 
@@ -20,36 +20,29 @@ import static dev.abu.screener_backend.utils.EnvParams.SPOT_URL;
 public class TickerClient {
 
     private static final CloseableHttpClient httpClient = HttpClients.createDefault();
-    private static final Map<String, Double> prices = new HashMap<>();
     private static final ObjectMapper mapper = new ObjectMapper();
+    private static final Map<String, Double> pairs = new ConcurrentHashMap<>();
 
-    private record SymbolPrice(String symbol, double price) { }
+    public static synchronized double getPrice(String symbol) {
+        return pairs.get(symbol);
+    }
 
-    public static void setPrices(List<String> symbols) {
+    public static void setPairs() {
         try {
-            String payload = getData();
-            List<SymbolPrice> pairs = mapper.readValue(payload, new TypeReference<>() {});
-            for (SymbolPrice pair : pairs) {
-                String symbol = pair.symbol().toLowerCase();
-                if (!symbols.contains(symbol)) {
-                    continue;
-                }
-                double price = pair.price();
-                prices.put(symbol, price);
+            String json = getData();
+            List<Map<String, String>> dataList = mapper.readValue(json, new TypeReference<>() {});
+
+            for (Map<String, String> entry : dataList) {
+                pairs.put(entry.get("symbol").toLowerCase(), Double.parseDouble(entry.get("price")));
             }
-            log.info("All prices for {} tickers are set successfully.", symbols.size());
+
         } catch (JsonProcessingException e) {
-            log.error("Error while parsing JSON", e);
+            log.error("Error while reading ticker prices", e);
         }
     }
 
-    public static synchronized double getPrice(String symbol) {
-        double price = prices.getOrDefault(symbol, 0.0);
-        if (price == 0.0) {
-            log.error("price not set for symbol {}", symbol);
-            return 1;
-        }
-        return price;
+    public static void stabilizePairs(List<String> symbols) {
+        pairs.keySet().retainAll(symbols);
     }
 
     private static String getData() {

@@ -4,8 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.abu.screener_backend.entity.Ticker;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -15,7 +15,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static dev.abu.screener_backend.binance.ExchangeInfoClient.getExchangeInfo;
-import static dev.abu.screener_backend.binance.TickerClient.setPrices;
+import static dev.abu.screener_backend.binance.TickerClient.*;
 
 @Slf4j
 @Service
@@ -36,13 +36,24 @@ public class TickerService {
             "btcusdt"
     };
 
-    /** JPA Ticker Repository to interact with a Database */
+    /**
+     * JPA Ticker Repository to interact with a Database.
+     */
     private final TickerRepository tickerRepository;
 
     public TickerService(TickerRepository tickerRepository) {
         this.tickerRepository = tickerRepository;
+        updateTickers();
+    }
+
+    /**
+     * Updates the list of all tickers and their properties/prices every 24h.
+     */
+    @Scheduled(initialDelay = 86400000, fixedRate = 86400000)
+    public void updateTickers() {
+        setPairs();
         setAllTickers();
-        setPrices(getAllSymbols());
+        stabilizePairs(getAllSymbols());
     }
 
     /**
@@ -91,8 +102,8 @@ public class TickerService {
     /**
      * @param symbol ticker to save to the Database.
      */
-    public void saveTicker(String symbol, boolean hasSpot, boolean hasFut) {
-        tickerRepository.save(new Ticker(symbol, hasSpot, hasFut));
+    public void saveTicker(String symbol, double price, boolean hasSpot, boolean hasFut) {
+        tickerRepository.save(new Ticker(symbol, price, hasSpot, hasFut));
     }
 
     /**
@@ -154,7 +165,8 @@ public class TickerService {
 
         for (String symbol : spotSymbols) {
             boolean hasFut = futSymbols.contains(symbol);
-            saveTicker(symbol, true, hasFut);
+            double price = getPrice(symbol.toLowerCase());
+            saveTicker(symbol, price, true, hasFut);
         }
 
         log.info("Saved all {} tickers", count());
@@ -162,6 +174,7 @@ public class TickerService {
 
     /**
      * Puts all popular tickers to the front.
+     *
      * @param symbols a list to change order for.
      */
     private void setPopularTickersFirst(List<String> symbols) {

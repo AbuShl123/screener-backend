@@ -15,12 +15,14 @@ public class DepthClient {
 
     private DepthClient() {}
 
-    private static final int API_RATE_LIMIT = 5900;
+    private static final int SPOT_API_RATE_LIMIT = 5900;
+    private static final int FUT_API_RATE_LIMIT = 2300;
+
     private static final CloseableHttpClient httpClient = HttpClients.createDefault();
     private static int weightUsedPerMinute = 0;
 
     public synchronized static String getInitialSnapshot(String symbol, boolean isSpot) {
-        checkRateLimits();
+        checkRateLimits(isSpot);
 
         String baseUri = isSpot ? SPOT_URL : FUT_URL;
         HttpGet depthRequest = new HttpGet(baseUri + "/depth?symbol=" + symbol.toUpperCase() + "&limit=1000");
@@ -42,9 +44,10 @@ public class DepthClient {
         return null;
     }
 
-    private static void checkRateLimits() {
+    private static void checkRateLimits(boolean isSpot) {
         // Binance has api rate limits that need to be respected or otherwise the ip will be banned
-        if (weightUsedPerMinute >= API_RATE_LIMIT) {
+        int apiRateLimit = isSpot ? SPOT_API_RATE_LIMIT : FUT_API_RATE_LIMIT;
+        if (weightUsedPerMinute >= apiRateLimit) {
 
             // wait until the next minute, so that the weight-used-per-minute gets reset
             long millisToWait = getMillisUntilNextMinute();
@@ -72,7 +75,15 @@ public class DepthClient {
         // Calculate elapsed milliseconds within the current minute
         long elapsedMillisecondsInMinute = currentTimeMillis % millisecondsInMinute;
 
-        // Calculate remaining milliseconds until the next minute
-        return millisecondsInMinute - elapsedMillisecondsInMinute;
+        // Calculate remaining milliseconds until the next minute and add 2 seconds just in case...
+        long result = millisecondsInMinute - elapsedMillisecondsInMinute + 2000;
+
+        // in case if we need to wait for 1min,
+        // then it's kinda wierd, so just waiting for 2 seconds will be enough
+        if (result >= 60_000) {
+            return 2;
+        }
+
+        return result;
     }
 }

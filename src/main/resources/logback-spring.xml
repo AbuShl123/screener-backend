@@ -65,7 +65,7 @@
     </logger>
 
     <!-- Logger for OrderBook -->
-    <logger name="dev.abu.screener_backend.binance.OrderBook" level="debug" additivity="false">
+    <logger name="dev.abu.screener_backend.analysis.OrderBook" level="debug" additivity="false">
         <appender-ref ref="OB_FILE"/>
         <appender-ref ref="INFO_CONSOLE"/>
     </logger>

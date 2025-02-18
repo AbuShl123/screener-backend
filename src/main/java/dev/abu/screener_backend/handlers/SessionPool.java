@@ -33,7 +33,6 @@ public class SessionPool {
     private final Set<String> symbols;
     private final List<String> spotSymbols;
     private final List<String> futSymbols;
-    private final Map<String, WSDepthClient> wsClients;
 
     public SessionPool(TickerService tickerService) {
         this.sessions = new HashSet<>();
@@ -41,7 +40,6 @@ public class SessionPool {
         this.symbols = new HashSet<>();
         this.spotSymbols = tickerService.getSpotSymbols();
         this.futSymbols = tickerService.getFutSymbols();
-        this.wsClients = new HashMap<>();
     }
 
     public void addSession(WebSocketSession session) throws IOException {

@@ -1,10 +1,9 @@
 package dev.abu.screener_backend.analysis;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.abu.screener_backend.binance.TickerClient;
 import dev.abu.screener_backend.entity.Trade;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
@@ -18,8 +17,7 @@ import static java.lang.Math.abs;
 public class OrderBookStream {
 
     private static final Map<String, OrderBookStream> streams = new HashMap<>();
-    private static final ObjectMapper mapper = new ObjectMapper();
-
+    @Getter
     private final String symbol;
     private final TradeList orderBook;
     private final HashSet<Double> quantitiesDataSet = new HashSet<>();
@@ -41,26 +39,12 @@ public class OrderBookStream {
         return streams.get(symbol);
     }
 
-    public void reset() {
-        orderBook.clear();
+    public static synchronized Collection<OrderBookStream> getAllInstances() {
+        return streams.values();
     }
 
-    public synchronized void buffer(String rawData) {
-        try {
-            JsonNode json = mapper.readTree(rawData);
-            long timestamp = getTimeStamp(json);
-
-            var asksArray = getTradeArray(rawData, json, true);
-            traverseArray(asksArray, timestamp, true);
-
-            var bidsArray = getTradeArray(rawData, json, false);
-            traverseArray(bidsArray, timestamp, false);
-
-            densityAnalyzer.analyzeDensities(getQuantitiesDataSet());
-            quantitiesDataSet.clear();
-        } catch (JsonProcessingException e) {
-            log.error(e.getMessage());
-        }
+    public void reset() {
+        orderBook.clear();
     }
 
     public void analyze(JsonNode root, JsonNode asksArray, JsonNode bidsArray) {
@@ -78,27 +62,6 @@ public class OrderBookStream {
         if (eField == null) return System.currentTimeMillis();
         long timestamp = eField.asLong();
         return timestamp == 0 ? System.currentTimeMillis() : timestamp;
-    }
-
-    private JsonNode getTradeArray(String rawData, JsonNode json, boolean ask) {
-        String arrayFull = ask ? "a" : "b";
-        String arrayShort = ask ? "asks" : "bids";
-
-        JsonNode data = json.get("data");
-        JsonNode array;
-
-        if (data != null) {
-            array = data.get(arrayFull);
-        } else {
-            array = json.get(arrayShort);
-        }
-
-        if (array == null) {
-            log.error("{} array for symbol {} is null: {}", arrayShort, symbol, rawData);
-            return null;
-        }
-
-        return array;
     }
 
     private void traverseArray(JsonNode array, long timestamp, boolean isAsk) {
@@ -127,6 +90,10 @@ public class OrderBookStream {
 
     public synchronized List<Trade> getAsks() {
         return orderBook.getAsks().values().stream().flatMap(Set::stream).collect(Collectors.toList());
+    }
+
+    public synchronized Trade getMaxTrade(boolean isAsk) {
+        return orderBook.getMaxTrade(isAsk);
     }
 
     public double[] getQuantitiesDataSet() {
