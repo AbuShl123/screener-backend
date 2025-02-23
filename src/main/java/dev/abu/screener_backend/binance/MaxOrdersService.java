@@ -23,6 +23,18 @@ public class MaxOrdersService {
         }
     }
 
+    private String getOnlyDensityData() {
+        StringBuilder data = new StringBuilder("{");
+
+        for (OrderBookStream stream : OrderBookStream.getAllInstances()) {
+            data.append("\"").append(stream.getSymbol()).append("\":").append(stream.getMaxDensity()).append(',');
+        }
+
+        if (data.charAt(data.length() - 1) == ',') data.deleteCharAt(data.length() - 1);
+        data.append("}");
+        return data.toString();
+    }
+
     private String getData() {
         StringBuilder array = new StringBuilder("[");
 
@@ -31,8 +43,8 @@ public class MaxOrdersService {
             Trade maxBid = stream.getMaxTrade(false);
             double maxBidQty = maxBid != null ? maxBid.getQuantity() : 0;
             double maxAskQty = maxAsk != null ? maxAsk.getQuantity() : 0;
-            double bidDensity = maxBid != null ? maxBid.getDensity() : 0;
-            double askDensity = maxAsk != null ? maxAsk.getDensity() : 0;
+            int bidDensity = maxBid != null ? maxBid.getDensity() : 0;
+            int askDensity = maxAsk != null ? maxAsk.getDensity() : 0;
 
             array
                     .append('{')

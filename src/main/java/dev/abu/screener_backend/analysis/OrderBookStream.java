@@ -96,6 +96,10 @@ public class OrderBookStream {
         return orderBook.getMaxTrade(isAsk);
     }
 
+    public synchronized int getMaxDensity() {
+        return orderBook.getMaxDensity();
+    }
+
     public double[] getQuantitiesDataSet() {
         return quantitiesDataSet.stream().mapToDouble(e -> e).toArray();
     }

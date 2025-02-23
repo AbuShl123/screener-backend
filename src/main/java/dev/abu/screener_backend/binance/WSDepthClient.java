@@ -4,20 +4,21 @@ import dev.abu.screener_backend.analysis.OBMessageHandler;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
-import org.springframework.web.socket.CloseStatus;
-import org.springframework.web.socket.WebSocketHandler;
-import org.springframework.web.socket.WebSocketMessage;
-import org.springframework.web.socket.WebSocketSession;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.web.socket.*;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Setter
 @Slf4j
 public class WSDepthClient extends WSBinanceClient {
 
     private final OBMessageHandler messageHandler;
+    private final AtomicReference<WebSocketSession> sessionRef = new AtomicReference<>();
 
     public WSDepthClient(String name, String url, boolean isSpot, String... symbols) {
         super(name, url);
@@ -29,6 +30,10 @@ public class WSDepthClient extends WSBinanceClient {
         return new OrderBookHandler();
     }
 
+    public WebSocketSession getSession() {
+        return sessionRef.get();
+    }
+
     private class OrderBookHandler extends TextWebSocketHandler {
 
         @Override
@@ -38,6 +43,7 @@ public class WSDepthClient extends WSBinanceClient {
 
         @Override
         public void afterConnectionEstablished(@NonNull WebSocketSession session) {
+            sessionRef.set(session);
             log.info("{} websocket connection established", websocketName);
         }
 

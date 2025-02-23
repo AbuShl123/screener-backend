@@ -6,9 +6,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.PingMessage;
+import org.springframework.web.socket.WebSocketSession;
 
+import java.nio.ByteBuffer;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static dev.abu.screener_backend.utils.EnvParams.*;
@@ -19,8 +24,10 @@ import static dev.abu.screener_backend.utils.EnvParams.*;
 public class TasksRunner implements CommandLineRunner {
 
     private static final Map<String, Integer> reSyncCountMap = new ConcurrentHashMap<>();
-    private static int conns = 0;
+    private static final Set<WSDepthClient> websockets = new HashSet<>();
+
     private final TickerService tickerService;
+    private int conns = 0;
 
     public static int reSyncCount(String websocketName) {
         return reSyncCountMap.get(websocketName);
@@ -36,13 +43,11 @@ public class TasksRunner implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        establishConnections();
-    }
-
-    private void establishConnections() {
         List<String> symbols = tickerService.getSpotSymbols();
         log.info("Connecting to {} spot symbols", symbols.size());
         connectByChunks(symbols, true);
+
+        conns = 0;
 
         symbols = tickerService.getFutSymbols();
         log.info("Connecting to {} fut symbols", symbols.size());
@@ -59,6 +64,7 @@ public class TasksRunner implements CommandLineRunner {
 
             // start websocket with the provided chunk of symbols
             var ws = startWebsocket(chunk, isSpot);
+            websockets.add(ws);
 
             // wait until current order book finishes processing initial snapshots
             while (reSyncCount(ws.getName()) < chunk.size()) {
@@ -81,16 +87,29 @@ public class TasksRunner implements CommandLineRunner {
         reSyncCountMap.put(name, 0);
         conns++;
 
+        log.info("connecting to url: {}", wsUrl);
         WSDepthClient ws = new WSDepthClient(name, wsUrl.toString(), isSpot, symbols.toArray(new String[0]));
         ws.startWebSocket();
         return ws;
     }
 
-    private void waitFor(long millis) {
+    public static void waitFor(long millis) {
         try {
             Thread.sleep(millis);
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            Thread.currentThread().interrupt();
+            log.error("Error while waiting: ", e);
+        }
+    }
+
+    private void sendPingMessage(String name, WebSocketSession session) {
+        if (session != null && session.isOpen()) {
+            try {
+                PingMessage pingMessage = new PingMessage(ByteBuffer.wrap("ping".getBytes()));
+                session.sendMessage(pingMessage);
+            } catch (Exception e) {
+                log.error("{} Failed to send ping message - {}", name, e.getMessage());
+            }
         }
     }
 }

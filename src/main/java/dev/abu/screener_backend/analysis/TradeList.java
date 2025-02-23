@@ -101,6 +101,25 @@ public class TradeList {
         return level;
     }
 
+    public int getMaxDensity() {
+        int maxBidDensity = getMaxDensity(false);
+        int maxAskDensity = getMaxDensity(true);
+        return Math.max(maxBidDensity, maxAskDensity);
+    }
+
+    private int getMaxDensity(boolean isAsk) {
+        var trades = isAsk ? asks : bids;
+        int maxDensity = 0;
+
+        for (TreeSet<Trade> tradeList : trades.values()) {
+            if (tradeList.isEmpty()) continue;
+            Trade t = tradeList.last();
+            if (maxDensity < t.getDensity()) maxDensity = t.getDensity();
+        }
+
+        return maxDensity;
+    }
+
     public Trade getMaxTrade(boolean isAsk) {
         var trades = isAsk ? asks : bids;
 

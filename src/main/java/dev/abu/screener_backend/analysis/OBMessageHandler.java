@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.abu.screener_backend.binance.MessageBuffer;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.socket.PingMessage;
+import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketMessage;
 
 import java.util.HashMap;
@@ -22,7 +24,6 @@ public class OBMessageHandler {
     private final ObjectMapper mapper = new ObjectMapper();
     private final String websocketName;
     private final boolean isSpot;
-    private String firstSymbol;
 
     public OBMessageHandler(String name, boolean isSpot, String... symbols) {
         this.websocketName = name;
@@ -32,6 +33,7 @@ public class OBMessageHandler {
     }
 
     public void handleMessage(WebSocketMessage<?> message) {
+        if (!(message instanceof TextMessage)) return;
         messageBuffer.buffer(message.getPayload().toString());
         if (messageBuffer.size() % 100 == 0)
             log.info("{} {} messages are buffered", websocketName, messageBuffer.size());
@@ -54,13 +56,10 @@ public class OBMessageHandler {
             String symbol = symbolNode.asText().toLowerCase();
             var marketSymbol = symbol + (isSpot ? "" : FUT_SIGN);
 
-            if (firstSymbol == null) firstSymbol = marketSymbol;
-//            if (firstSymbol.equals(marketSymbol)) log.info("Phase started");
-
             orderBooks.get(marketSymbol).process(data);
             return marketSymbol;
         } catch (Exception e) {
-            log.error("{} Failed to read json data", websocketName, e);
+            log.error("{} Failed to read json data - {}", websocketName, message, e);
         }
         return null;
     }

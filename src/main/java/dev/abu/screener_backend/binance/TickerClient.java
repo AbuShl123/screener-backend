@@ -55,7 +55,7 @@ public class TickerClient {
                 return EntityUtils.toString(entity);
             }
         } catch (Exception e) {
-            throw new RuntimeException("Failed to get send request for depth snapshot: " + e.getMessage());
+            throw new RuntimeException("Failed to send request for depth snapshot: " + e.getMessage());
         }
 
         return null;

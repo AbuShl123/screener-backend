@@ -13,6 +13,7 @@ import org.springframework.web.socket.WebSocketSession;
 import java.io.IOException;
 import java.util.*;
 
+import static dev.abu.screener_backend.TasksRunner.waitFor;
 import static dev.abu.screener_backend.binance.TickerService.popularTickers;
 import static dev.abu.screener_backend.utils.EnvParams.CHUNK_SIZE;
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
@@ -67,6 +68,7 @@ public class SessionPool {
                     broadCastData(session, symbol, bids, asks);
                 }
             });
+            waitFor(500);
         }
     }
 

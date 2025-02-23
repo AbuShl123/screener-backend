@@ -2,10 +2,12 @@ package dev.abu.screener_backend.analysis;
 
 import lombok.Getter;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+@Getter
 public class DensityAnalyzer {
 
     private static final Map<String, DensityAnalyzer> analyzers = new HashMap<>();
@@ -21,12 +23,16 @@ public class DensityAnalyzer {
         return analyzers.get(symbol);
     }
 
+    public synchronized static Collection<DensityAnalyzer> getAllDensityAnalyzers() {
+        return analyzers.values();
+    }
+
     @Getter
-    private final AtomicReference<Integer> firstLevel = new AtomicReference<>(-1);
+    private final AtomicReference<Double> firstLevel = new AtomicReference<>(-1.0);
     @Getter
-    private final AtomicReference<Integer> secondLevel = new AtomicReference<>(-1);
+    private final AtomicReference<Double> secondLevel = new AtomicReference<>(-1.0);
     @Getter
-    private final AtomicReference<Integer> thirdLevel = new AtomicReference<>(-1);
+    private final AtomicReference<Double> thirdLevel = new AtomicReference<>(-1.0);
 
     private DensityAnalyzer(String symbol) {
         this.symbol = symbol;
@@ -57,9 +63,9 @@ public class DensityAnalyzer {
         int mean = calculateMean(dataSet);
         int digits = mean == 0 ? 1 : (int) Math.pow(10, getNumOfDigits(mean));
 
-        firstLevel.set(digits);
-        secondLevel.set(digits * 10);
-        thirdLevel.set(digits * 100);
+        firstLevel.set((double) digits);
+        secondLevel.set((double) digits * 10);
+        thirdLevel.set((double) digits * 100);
     }
 
     private int calculateMean(double[] dataSet) {

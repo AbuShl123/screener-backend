@@ -21,6 +21,14 @@ import static dev.abu.screener_backend.binance.TickerClient.*;
 @Service
 public class TickerService {
 
+    /**
+     * This is a hardcoded list of tickers, that don't need to be analyzed
+     */
+    public static final Set<String> garbageTickers = Set.of("bttcusdt");
+
+    /**
+     * This is a hardcoded list of popular tickers, that preferably should come first in the list
+     */
     public static final String[] popularTickers = {
             "bnxusdt",
             "shibusdt",
@@ -150,7 +158,7 @@ public class TickerService {
         for (JsonNode jsonNode : spotArr) {
             String status = jsonNode.get("status").asText();
             String symbol = jsonNode.get("symbol").asText().toLowerCase();
-            if (status.equals("TRADING") && symbol.endsWith("usdt")) {
+            if (status.equals("TRADING") && symbol.endsWith("usdt") && !garbageTickers.contains(symbol)) {
                 spotSymbols.add(symbol);
             }
         }
@@ -158,7 +166,7 @@ public class TickerService {
         for (JsonNode jsonNode : futArr) {
             String status = jsonNode.get("status").asText();
             String symbol = jsonNode.get("symbol").asText().toLowerCase();
-            if (status.equals("TRADING") && symbol.endsWith("usdt")) {
+            if (status.equals("TRADING") && symbol.endsWith("usdt") && !garbageTickers.contains(symbol)) {
                 futSymbols.add(symbol);
             }
         }
@@ -173,7 +181,7 @@ public class TickerService {
     }
 
     /**
-     * Puts all popular tickers to the front.
+     * Puts all popular tickers to the front of the list.
      *
      * @param symbols a list to change order for.
      */

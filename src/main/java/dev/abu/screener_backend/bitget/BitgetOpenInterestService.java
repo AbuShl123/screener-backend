@@ -16,7 +16,7 @@ import static java.lang.Double.NaN;
 @Service
 public class BitgetOpenInterestService {
 
-    private static final long UPDATE_INTERVAL = 5 * 60 * 1000;
+    private static final long UPDATE_INTERVAL = 2 * 60 * 1000;
     private static final double INTEREST_THRESHOLD = 5.00;
 
     private final ObjectMapper mapper;
@@ -35,7 +35,7 @@ public class BitgetOpenInterestService {
         symbols.forEach(symbol -> pastInterests.put(symbol, null));
     }
 
-    @Scheduled(fixedRate = UPDATE_INTERVAL, initialDelay = 5_000)
+    @Scheduled(fixedDelay = UPDATE_INTERVAL, initialDelay = 5_000)
     private void checkInterestChange() {
         updateAllTickers();
         analyzeOI();
