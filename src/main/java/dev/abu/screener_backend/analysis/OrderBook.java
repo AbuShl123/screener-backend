@@ -55,12 +55,7 @@ public class OrderBook {
             processEvent(root);
         }
 
-        // in any other case, the events will be buffered until the
-        // concurrent task is finished
-        else {
-            bufferEvent(root);
-            if (messageBuffer.size() % 100 == 0) log.info("{} {} is late by {} events", websocketName, symbol, messageBuffer.size());
-        }
+        // in any other case, events will be ignored
     }
 
     private void processEventConcurrently(JsonNode root) {

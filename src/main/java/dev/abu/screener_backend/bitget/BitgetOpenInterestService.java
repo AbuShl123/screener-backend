@@ -4,12 +4,19 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.abu.screener_backend.handlers.WSOpenInterestHandler;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.http.HttpEntity;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
-import static io.restassured.RestAssured.given;
 import static java.lang.Double.NaN;
 
 @Slf4j
@@ -18,6 +25,8 @@ public class BitgetOpenInterestService {
 
     private static final long UPDATE_INTERVAL = 2 * 60 * 1000;
     private static final double INTEREST_THRESHOLD = 5.00;
+    private static final String BITGET_URL = "https://api.bitget.com/api/mix/v1/market";
+    private static final CloseableHttpClient httpClient = HttpClients.createDefault();
 
     private final ObjectMapper mapper;
     private final Set<String> symbols;
@@ -35,7 +44,7 @@ public class BitgetOpenInterestService {
         symbols.forEach(symbol -> pastInterests.put(symbol, null));
     }
 
-    @Scheduled(fixedDelay = UPDATE_INTERVAL, initialDelay = 5_000)
+    @Scheduled(fixedDelay = UPDATE_INTERVAL, initialDelay = 5000)
     private void checkInterestChange() {
         updateAllTickers();
         analyzeOI();
@@ -65,7 +74,7 @@ public class BitgetOpenInterestService {
             // calculate how much the OI dropped/rose from the last time
             double deltaPercentage = ((currentInterest - pastInterest) / pastInterest) * 100;
             log.debug("{} --- c = {}, p = {}, i = {} --- {}",
-                    symbol, pastInterest, currentInterest, deltaPercentage, ( deltaPercentage > INTEREST_THRESHOLD ? "HIGH" : "LOW"));
+                    symbol, pastInterest, currentInterest, deltaPercentage, (deltaPercentage > INTEREST_THRESHOLD ? "HIGH" : "LOW"));
 
             // if the delta to above the 5%, then broadcast it.
             if (deltaPercentage > INTEREST_THRESHOLD) {
@@ -145,29 +154,50 @@ public class BitgetOpenInterestService {
     }
 
     public synchronized String getOpenInterest(String symbol) {
-        return given()
-                .queryParam("symbol", symbol)
-                .when()
-                .get("https://api.bitget.com/api/mix/v1/market/open-interest")
-                .then()
-                .extract().response().asPrettyString();
+        HttpGet request = new HttpGet(BITGET_URL + "/open-interest?symbol=" + symbol);
+        request.addHeader("Accept", "application/json");
+
+        try (var response = httpClient.execute(request)) {
+            HttpEntity entity = response.getEntity();
+            if (entity != null) {
+                return EntityUtils.toString(entity);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to fetch BitGet open interest for " + symbol + ": " + e.getMessage());
+        }
+
+        return null;
     }
 
     public synchronized String getAllFuturesSymbols() {
-        return given()
-                .queryParam("productType", "umcbl")
-                .when()
-                .get("https://api.bitget.com/api/mix/v1/market/contracts")
-                .then()
-                .extract().response().asPrettyString();
+        HttpGet request = new HttpGet(BITGET_URL + "/contracts?productType=umcbl");
+        request.addHeader("Accept", "application/json");
+
+        try (var response = httpClient.execute(request)) {
+            HttpEntity entity = response.getEntity();
+            if (entity != null) {
+                return EntityUtils.toString(entity);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to fetch BitGet futures symbols: " + e.getMessage());
+        }
+
+        return null;
     }
 
     public synchronized String getPrice(String symbol) {
-        return given()
-                .queryParam("symbol", symbol)
-                .when()
-                .get("https://api.bitget.com/api/mix/v1/market/ticker")
-                .then()
-                .extract().response().asPrettyString();
+        HttpGet request = new HttpGet(BITGET_URL + "/ticker?symbol=" + symbol);
+        request.addHeader("Accept", "application/json");
+
+        try (var response = httpClient.execute(request)) {
+            HttpEntity entity = response.getEntity();
+            if (entity != null) {
+                return EntityUtils.toString(entity);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to fetch BitGet ticker price for " + symbol + ": " + e.getMessage());
+        }
+
+        return null;
     }
 }

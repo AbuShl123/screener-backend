@@ -23,7 +23,8 @@ public class MessageBuffer<E> {
 
     public void buffer(E message) {
         if (!messageQueue.offer(message)) {
-            log.warn("Buffer Overflow!!! - it is fucked up now.");
+            log.warn("Buffer Overflow!!! - it is fucked up now. Cleaning all the messages.");
+            messageQueue.clear();
         }
     }
 
