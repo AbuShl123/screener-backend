@@ -2,93 +2,61 @@ package dev.abu.screener_backend.analysis;
 
 import lombok.Getter;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
-
 @Getter
 public class DensityAnalyzer {
 
-    private static final Map<String, DensityAnalyzer> analyzers = new HashMap<>();
+    private static final double[] levels;
 
-    private final String symbol;
-    private double sum;
-    private long qty;
+    static {
+        levels = new double[20];
+        levels[0] = 0.5;
+        levels[1] = 300_000;
+        levels[2] = 250_000;
+        levels[3] = 200_000;
 
-    public synchronized static DensityAnalyzer getDensityAnalyzer(String symbol) {
-        if (!analyzers.containsKey(symbol)) {
-            analyzers.put(symbol, new DensityAnalyzer(symbol));
-        }
-        return analyzers.get(symbol);
+        levels[4] = 1.0;
+        levels[5] = 500_000;
+        levels[6] = 450_000;
+        levels[7] = 400_000;
+
+        levels[8] = 2.0;
+        levels[9] = 1_000_000;
+        levels[10] = 800_000;
+        levels[11] = 700_000;
+
+        levels[12] = 5.0;
+        levels[13] = 10_000_000;
+        levels[14] = 5_000_000;
+        levels[15] = 1_000_000;
+
+        levels[16] = 10.0;
+        levels[17] = 10_000_000;
+        levels[18] = 5_000_000;
+        levels[19] = 1_000_000;
     }
 
-    public synchronized static Collection<DensityAnalyzer> getAllDensityAnalyzers() {
-        return analyzers.values();
-    }
+    public static synchronized int getDensity(double price, double qty, double incline, String symbol) {
+        double percentage = Math.floor(Math.abs(incline));
+        double value = price * qty;
+        boolean largeTicker = symbol.contains("btcusdt") || symbol.contains("ethusdt");
 
-    @Getter
-    private final AtomicReference<Double> firstLevel = new AtomicReference<>(-1.0);
-    @Getter
-    private final AtomicReference<Double> secondLevel = new AtomicReference<>(-1.0);
-    @Getter
-    private final AtomicReference<Double> thirdLevel = new AtomicReference<>(-1.0);
-
-    private DensityAnalyzer(String symbol) {
-        this.symbol = symbol;
-    }
-
-    public synchronized int getDensity(double data) {
-
-        if (firstLevel.get() == -1 || secondLevel.get() == -1 || thirdLevel.get() == -1) {
-            return 0;
+        for (int i = 0; i < levels.length; i += 4) {
+            double distance = largeTicker ? levels[i] / 2 : levels[i];
+            if (percentage <= distance) {
+                return getDensity(value, i, largeTicker);
+            }
         }
 
-        if (data < firstLevel.get()) {
-            return 0;
-        }
-
-        if (data < secondLevel.get()) {
-            return 1;
-        }
-
-        if (data < thirdLevel.get()) {
-            return 2;
-        }
-
-        return 3;
+        return 0;
     }
 
-    public void analyzeDensities(double[] dataSet) {
-        int mean = calculateMean(dataSet);
-        int digits = mean == 0 ? 1 : (int) Math.pow(10, getNumOfDigits(mean));
-
-        firstLevel.set((double) digits);
-        secondLevel.set((double) digits * 10);
-        thirdLevel.set((double) digits * 100);
-    }
-
-    private int calculateMean(double[] dataSet) {
-        for (double v : dataSet) {
-            if (v >= Double.MAX_VALUE - sum) sum = 0;
-            sum += v;
-            if (qty == Long.MAX_VALUE) qty = 0;
-            qty++;
-        }
-        return (int) Math.ceil(sum / qty);
-    }
-
-    private int getNumOfDigits(int num) {
-        int digits = 0;
-        while (num > 0) {
-            digits++;
-            num /= 10;
-        }
-        return digits;
-    }
-
-    @Override
-    public String toString() {
-        return "DensityAnalyzer: {symbol=" + symbol + ", firstLevel=" + firstLevel.get() + ", secondLevel=" + secondLevel.get() + ", thirdLevel=" + thirdLevel.get() + "}";
+    private static int getDensity(double data, int i, boolean largeTicker) {
+        double level3 = largeTicker ? levels[i + 1] * 10 : levels[i + 1];
+        double level2 = largeTicker ? levels[i + 2] * 10 : levels[i + 2];
+        double level1 = largeTicker ? levels[i + 3] * 10 : levels[i + 3];
+        if (data >= level3) return 3;
+        if (data >= level2) return 2;
+        if (data >= level1) return 1;
+        else return 0;
     }
 }

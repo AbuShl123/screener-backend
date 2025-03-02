@@ -43,14 +43,10 @@ public class TasksRunner implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        List<String> symbols = tickerService.getSpotSymbols();
-        log.info("Connecting to {} spot symbols", symbols.size());
+        List<String> symbols = tickerService.getAllSymbols();
+        log.info("Connecting to {} symbols", symbols.size());
+
         connectByChunks(symbols, true);
-
-        conns = 0;
-
-        symbols = tickerService.getFutSymbols();
-        log.info("Connecting to {} fut symbols", symbols.size());
         connectByChunks(symbols, false);
     }
 

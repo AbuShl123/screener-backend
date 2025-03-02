@@ -12,10 +12,7 @@ import org.apache.http.util.EntityUtils;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import static java.lang.Double.NaN;
 
@@ -23,15 +20,16 @@ import static java.lang.Double.NaN;
 @Service
 public class BitgetOpenInterestService {
 
+    private static LinkedList<String> history = new LinkedList<>();
     private static final long UPDATE_INTERVAL = 2 * 60 * 1000;
     private static final double INTEREST_THRESHOLD = 5.00;
     private static final String BITGET_URL = "https://api.bitget.com/api/mix/v1/market";
     private static final CloseableHttpClient httpClient = HttpClients.createDefault();
 
+    private final WSOpenInterestHandler websocket;
     private final ObjectMapper mapper;
     private final Set<String> symbols;
     private final Map<String, Double> pastInterests;
-    private final WSOpenInterestHandler websocket;
     private long lastTickerUpdate;
 
     public BitgetOpenInterestService(WSOpenInterestHandler websocket) {
@@ -50,6 +48,16 @@ public class BitgetOpenInterestService {
         analyzeOI();
     }
 
+    public String getHistoricalOI() {
+        StringBuilder sb = new StringBuilder("[");
+        for (String data : history) {
+            sb.append(data).append(",");
+        }
+        if (sb.charAt(sb.length() - 1) == ',') sb.deleteCharAt(sb.length() - 1);
+        sb.append("]");
+        return sb.toString();
+    }
+
     private void updateAllTickers() {
         if (System.currentTimeMillis() - lastTickerUpdate >= 24 * 60 * 60 * 1000) {
             setAllSymbols();
@@ -58,7 +66,6 @@ public class BitgetOpenInterestService {
     }
 
     private void analyzeOI() {
-        long before = System.currentTimeMillis();
         for (String symbol : symbols) {
             // get current OI for the symbol
             Double currentInterest = fetchOpenInterest(symbol);
@@ -73,17 +80,24 @@ public class BitgetOpenInterestService {
 
             // calculate how much the OI dropped/rose from the last time
             double deltaPercentage = ((currentInterest - pastInterest) / pastInterest) * 100;
-            log.debug("{} --- c = {}, p = {}, i = {} --- {}",
-                    symbol, pastInterest, currentInterest, deltaPercentage, (deltaPercentage > INTEREST_THRESHOLD ? "HIGH" : "LOW"));
 
             // if the delta to above the 5%, then broadcast it.
             if (deltaPercentage > INTEREST_THRESHOLD) {
-                double deltaCoins = currentInterest - pastInterest;
-                String symbolName = symbol.replace("_UMCBL", "");
-                long timestamp = System.currentTimeMillis();
-                Double price = fetchTickerPrice(symbol);
-                double deltaDollars = price == null ? NaN : deltaCoins * price;
-                String payload = """
+                broadcastData(deltaPercentage, currentInterest, pastInterest, symbol);
+            }
+
+            // update the past interest with the current OI
+            pastInterests.put(symbol, currentInterest);
+        }
+    }
+
+    private void broadcastData(double deltaPercentage, Double currentInterest, Double pastInterest, String symbol) {
+        double deltaCoins = currentInterest - pastInterest;
+        String symbolName = symbol.replace("_UMCBL", "");
+        long timestamp = System.currentTimeMillis();
+        Double price = fetchTickerPrice(symbol);
+        double deltaDollars = price == null ? NaN : deltaCoins * price;
+        String payload = """
                         {
                         "symbol": "%s",
                         "deltaPercentage": %.2f,
@@ -92,15 +106,16 @@ public class BitgetOpenInterestService {
                         "timestamp": %d
                         }
                         """;
-                String data = String.format(payload, symbolName, deltaPercentage, deltaCoins, deltaDollars, timestamp);
-                log.debug("broadcasting OI data: {}", data);
-                websocket.broadCastData(data);
-            }
+        String data = String.format(payload, symbolName, deltaPercentage, deltaCoins, deltaDollars, timestamp);
+        websocket.broadCastData(data);
+        appendNewEventToHistory(data);
+    }
 
-            // update the past interest with the current OI
-            pastInterests.put(symbol, currentInterest);
+    private void appendNewEventToHistory(String event) {
+        history.addLast(event);
+        if (history.size() > 15) {
+            history.removeFirst();
         }
-        log.debug("finished iterating oi in {} seconds", (System.currentTimeMillis() - before) / 1000);
     }
 
     public Double fetchOpenInterest(String symbol) {

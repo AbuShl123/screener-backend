@@ -15,10 +15,5 @@ import java.util.List;
 @RequestMapping(path = "api/v1/tickers")
 public class TickerController {
 
-    private final TickerService tickerService;
 
-    @GetMapping()
-    public List<Ticker> allTickers() {
-        return tickerService.getAllTickers();
-    }
 }

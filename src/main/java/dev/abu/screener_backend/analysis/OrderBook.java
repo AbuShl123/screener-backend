@@ -39,9 +39,9 @@ public class OrderBook {
 
     public void process(JsonNode root) {
         // every hour re-sync is needed.
-        if (!isReSync && System.currentTimeMillis() - lastReSyncTime > 60 * 60 * 1000 ) {
-            startReSync();
-        }
+//        if (!isReSync && System.currentTimeMillis() - lastReSyncTime > 60 * 60 * 1000 ) {
+//            startReSync();
+//        }
 
         // if re-sync is needed and there is no any task that is queued for concurrent run,
         // then process this event concurrently to get the initial snapshot

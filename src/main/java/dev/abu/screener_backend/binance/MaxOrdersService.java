@@ -7,11 +7,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
+
 @Getter
 @Slf4j
 @Component
 public class MaxOrdersService {
-
     private String maxOrders;
 
     @Scheduled(fixedRate = 60_000, initialDelay = 10_000)
@@ -45,13 +46,15 @@ public class MaxOrdersService {
             double maxAskQty = maxAsk != null ? maxAsk.getQuantity() : 0;
             int bidDensity = maxBid != null ? maxBid.getDensity() : 0;
             int askDensity = maxAsk != null ? maxAsk.getDensity() : 0;
+            double price = TickerClient.getPrice(stream.getSymbol().replace(FUT_SIGN, ""));
 
             array
                     .append('{')
                     .append("\"symbol\":\"").append(stream.getSymbol()).append("\",")
                     .append("\"maxBidQty\":").append(maxBidQty).append(",")
                     .append("\"maxAskQty\":").append(maxAskQty).append(",")
-                    .append("\"density\":").append(Math.max(bidDensity, askDensity))
+                    .append("\"density\":").append(Math.max(bidDensity, askDensity)).append(",")
+                    .append("\"price\":").append(price)
                     .append("},");
         }
 

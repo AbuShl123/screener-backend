@@ -20,13 +20,10 @@ public class OrderBookStream {
     @Getter
     private final String symbol;
     private final TradeList orderBook;
-    private final HashSet<Double> quantitiesDataSet = new HashSet<>();
-    private final DensityAnalyzer densityAnalyzer;
 
     public OrderBookStream(String symbol) {
         this.symbol = symbol;
         this.orderBook = new TradeList(symbol);
-        this.densityAnalyzer = DensityAnalyzer.getDensityAnalyzer(symbol);
     }
 
     public static synchronized OrderBookStream createInstance(String symbol) {
@@ -49,12 +46,8 @@ public class OrderBookStream {
 
     public void analyze(JsonNode root, JsonNode asksArray, JsonNode bidsArray) {
         long timestamp = getTimeStamp(root);
-
         traverseArray(asksArray, timestamp, true);
         traverseArray(bidsArray, timestamp, false);
-
-        densityAnalyzer.analyzeDensities(getQuantitiesDataSet());
-        quantitiesDataSet.clear();
     }
 
     private long getTimeStamp(JsonNode root) {
@@ -68,19 +61,17 @@ public class OrderBookStream {
         if (array == null || (array.isArray() && array.isEmpty())) {
             return;
         }
-
         for (JsonNode node : array) {
-            var price = node.get(0).asText();
+            var price = node.get(0).asDouble();
             var qty = node.get(1).asDouble();
             filterByRange(price, qty, isAsk, timestamp);
         }
     }
 
-    private void filterByRange(String price, double qty, boolean isAsk, long timestamp) {
+    private void filterByRange(double price, double qty, boolean isAsk, long timestamp) {
         double incline = getIncline(price);
         if (abs(incline) <= MAX_INCLINE) {
             orderBook.addTrade(price, qty, incline, isAsk, timestamp);
-            quantitiesDataSet.add(qty);
         }
     }
 
@@ -100,15 +91,10 @@ public class OrderBookStream {
         return orderBook.getMaxDensity();
     }
 
-    public double[] getQuantitiesDataSet() {
-        return quantitiesDataSet.stream().mapToDouble(e -> e).toArray();
-    }
-
-    private double getIncline(String price) {
-        double p = Double.parseDouble(price);
+    private double getIncline(double price) {
         String ticker = symbol.replace(FUT_SIGN, "");
         double marketPrice = TickerClient.getPrice(ticker);
-        double ratio = p / marketPrice;
+        double ratio = price / marketPrice;
         return (ratio - 1) * 100;
     }
 }

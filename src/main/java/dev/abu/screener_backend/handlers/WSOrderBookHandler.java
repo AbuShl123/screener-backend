@@ -28,7 +28,7 @@ public class WSOrderBookHandler extends TextWebSocketHandler {
         log.info("Order book client session closed: {} - {}", session.getId(), status);
     }
 
-    @Scheduled(fixedDelay = 500)
+    @Scheduled(fixedDelay = 5000)
     public void sendUpdates() {
         sessionPool.clearClosedSessions();
         sessionPool.sendData();

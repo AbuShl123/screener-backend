@@ -2,9 +2,7 @@ package dev.abu.screener_backend.handlers;
 
 import dev.abu.screener_backend.analysis.OrderBookStream;
 import dev.abu.screener_backend.binance.TickerService;
-import dev.abu.screener_backend.binance.WSDepthClient;
 import dev.abu.screener_backend.entity.Trade;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.TextMessage;
@@ -14,8 +12,6 @@ import java.io.IOException;
 import java.util.*;
 
 import static dev.abu.screener_backend.TasksRunner.waitFor;
-import static dev.abu.screener_backend.binance.TickerService.popularTickers;
-import static dev.abu.screener_backend.utils.EnvParams.CHUNK_SIZE;
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 import static dev.abu.screener_backend.utils.RequestUtilities.getQueryParams;
 
@@ -29,22 +25,27 @@ public class SessionPool {
             }
             """;
 
+    /** Full list of sessions */
     private final Set<WebSocketSession> sessions;
+
+    /** Map of session->lists */
     private final Map<WebSocketSession, Set<String>> symbolsMap;
-    private final Set<String> symbols;
-    private final List<String> spotSymbols;
-    private final List<String> futSymbols;
+
+    /** List of spot and fut symbols connected */
+    private final Set<String> symbolsFlat;
+
+    /** List of all symbols */
+    private final List<String> allSymbols;
 
     public SessionPool(TickerService tickerService) {
         this.sessions = new HashSet<>();
         this.symbolsMap = new HashMap<>();
-        this.symbols = new HashSet<>();
-        this.spotSymbols = tickerService.getSpotSymbols();
-        this.futSymbols = tickerService.getFutSymbols();
+        this.symbolsFlat = new HashSet<>();
+        this.allSymbols = tickerService.getAllSymbols();
     }
 
     public void addSession(WebSocketSession session) throws IOException {
-        if (!setSymbols(session)) {
+        if (!checkInputData(session)) {
             sendMessage(session, INVALID_SYMBOL_MESSAGE);
             session.close();
             return;
@@ -53,8 +54,15 @@ public class SessionPool {
         log.info("Order book client session created for symbols {}", symbolsMap.get(session));
     }
 
+    public void clearClosedSessions() {
+        sessions.removeIf(session -> !session.isOpen());
+        symbolsMap.entrySet().removeIf(entry -> !entry.getKey().isOpen());
+        var flatSymbols = symbolsMap.values().stream().flatMap(Set::stream).toList();
+        symbolsFlat.removeIf(symbol -> !flatSymbols.contains(symbol));
+    }
+
     public void sendData() {
-        Set<String> symbols = new HashSet<>(this.symbols); // to avoid concurrent modification exception
+        Set<String> symbols = new HashSet<>(this.symbolsFlat); // to avoid concurrent modification exception
         Set<WebSocketSession> sessions = new HashSet<>(this.sessions);
 
         for (String symbol : symbols) {
@@ -68,15 +76,8 @@ public class SessionPool {
                     broadCastData(session, symbol, bids, asks);
                 }
             });
-            waitFor(500);
+            waitFor(100);
         }
-    }
-
-    public void clearClosedSessions() {
-        sessions.removeIf(session -> !session.isOpen());
-        symbolsMap.entrySet().removeIf(entry -> !entry.getKey().isOpen());
-        var flatSymbols = symbolsMap.values().stream().flatMap(Set::stream).toList();
-        symbols.removeIf(symbol -> !flatSymbols.contains(symbol));
     }
 
     private void broadCastData(WebSocketSession session, String symbol, List<Trade> bids, List<Trade> asks) {
@@ -103,7 +104,7 @@ public class SessionPool {
         }
     }
 
-    private boolean setSymbols(WebSocketSession session) {
+    private boolean checkInputData(WebSocketSession session) {
         var queryParamsMap = getQueryParams(session);
         String symbolsStr = queryParamsMap.get("symbols");
         if (symbolsStr == null || symbolsStr.isEmpty()) return false;
@@ -112,23 +113,12 @@ public class SessionPool {
 
         for (String s : arr) {
             String symbol = s.trim().toLowerCase();
-            if (!isValidSymbol(symbol)) return false;
-//            checkWSConnection(symbol);
+            if (!allSymbols.contains(symbol.replace(FUT_SIGN, ""))) return false;
             set.add(symbol);
         }
 
         this.symbolsMap.put(session, set);
-        this.symbols.addAll(set);
+        this.symbolsFlat.addAll(set);
         return true;
-    }
-
-    private boolean isValidSymbol(String symbol) {
-        if (symbols.contains(symbol)) {
-            return true;
-        } else if (symbol.endsWith(FUT_SIGN)) {
-            return futSymbols.contains(symbol.replace(FUT_SIGN, ""));
-        } else {
-            return spotSymbols.contains(symbol);
-        }
     }
 }

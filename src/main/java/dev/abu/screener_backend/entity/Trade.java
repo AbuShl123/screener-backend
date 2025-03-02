@@ -15,7 +15,7 @@ import static java.lang.Math.abs;
 @Getter
 public class Trade implements Comparable<Trade>, Serializable {
 
-    private String price;
+    private double price;
     private double quantity;
     private double incline;
     private int density;
@@ -32,7 +32,7 @@ public class Trade implements Comparable<Trade>, Serializable {
     @Override
     public boolean equals(Object obj) {
         if (obj instanceof Trade t) {
-            return t.price.equals(price);
+            return t.price == price;
         }
         return false;
     }
@@ -42,7 +42,7 @@ public class Trade implements Comparable<Trade>, Serializable {
         return String.format(
                 """
                 [
-                "%s",
+                "%f",
                 "%s",
                 "%.2f",
                 %d,

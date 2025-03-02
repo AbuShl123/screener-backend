@@ -24,7 +24,7 @@ public class TickerService {
     /**
      * This is a hardcoded list of tickers, that don't need to be analyzed
      */
-    public static final Set<String> garbageTickers = Set.of("bttcusdt");
+    public static final Set<String> garbageTickers = Set.of("bttcusdt", "usdcusdt", "fdusdusdt");
 
     /**
      * This is a hardcoded list of popular tickers, that preferably should come first in the list
@@ -41,7 +41,8 @@ public class TickerService {
             "solusdt",
             "xrpusdt",
             "ethusdt",
-            "btcusdt"
+            "btcusdt",
+            "maskusdt"
     };
 
     /**
@@ -75,32 +76,6 @@ public class TickerService {
     }
 
     /**
-     * @return {@link List<String>} containing only spot symbols as {@link String} objects.
-     */
-    public List<String> getSpotSymbols() {
-        List<Ticker> tickers = tickerRepository.findAll();
-        List<String> symbols = tickers.stream()
-                .filter(Ticker::isHasSpot)
-                .map(Ticker::getSymbol)
-                .collect(Collectors.toCollection(ArrayList::new));
-        setPopularTickersFirst(symbols);
-        return symbols;
-    }
-
-    /**
-     * @return {@link List<String>} containing only futures symbols as {@link String} objects.
-     */
-    public List<String> getFutSymbols() {
-        List<Ticker> tickers = tickerRepository.findAll();
-        List<String> symbols = tickers.stream()
-                .filter(Ticker::isHasFut)
-                .map(Ticker::getSymbol)
-                .collect(Collectors.toCollection(ArrayList::new));
-        setPopularTickersFirst(symbols);
-        return symbols;
-    }
-
-    /**
      * @return {@link List<Ticker>} containing all current symbols as {@link Ticker} objects.
      */
     public List<Ticker> getAllTickers() {
@@ -110,8 +85,8 @@ public class TickerService {
     /**
      * @param symbol ticker to save to the Database.
      */
-    public void saveTicker(String symbol, double price, boolean hasSpot, boolean hasFut) {
-        tickerRepository.save(new Ticker(symbol, price, hasSpot, hasFut));
+    public void saveTicker(String symbol, double price) {
+        tickerRepository.save(new Ticker(symbol, price));
     }
 
     /**
@@ -172,9 +147,9 @@ public class TickerService {
         }
 
         for (String symbol : spotSymbols) {
-            boolean hasFut = futSymbols.contains(symbol);
+            if (!futSymbols.contains(symbol)) continue;
             double price = getPrice(symbol.toLowerCase());
-            saveTicker(symbol, price, true, hasFut);
+            saveTicker(symbol, price);
         }
 
         log.info("Saved all {} tickers", count());

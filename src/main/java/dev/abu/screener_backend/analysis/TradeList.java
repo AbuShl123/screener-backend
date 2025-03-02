@@ -34,7 +34,7 @@ public class TradeList {
         asks.forEach((key, value) -> value.clear());
     }
 
-    void addTrade(String price, double qty, double incline, boolean isAsk, long timestamp) {
+    void addTrade(double price, double qty, double incline, boolean isAsk, long timestamp) {
         int level = getLevel(incline);
         if (isAsk) {
             addTrade(asks.get(level), price, qty, incline, timestamp);
@@ -44,21 +44,21 @@ public class TradeList {
         updateDensities();
     }
 
-    private boolean addTrade(TreeSet<Trade> orderBook, String price, double qty, double incline, long timestamp) {
+    private boolean addTrade(TreeSet<Trade> orderBook, double price, double qty, double incline, long timestamp) {
         // case when price level should be removed
         if (qty == 0) {
-            return orderBook.removeIf(trade -> trade.getPrice().equals(price));
+            return orderBook.removeIf(trade -> trade.getPrice() == price);
         }
 
         // case when there is already a trade with a given price
         for (Trade trade : orderBook) {
-            if (trade.getPrice().equals(price)) {
+            if (trade.getPrice() == price) {
                 trade.setQuantity(qty);
                 return true;
             }
         }
 
-        int density = DensityAnalyzer.getDensityAnalyzer(symbol).getDensity(qty);
+        int density = DensityAnalyzer.getDensity(price, qty, incline, symbol);
 
         // case when there are not enough trades in the order book
         if (orderBook.isEmpty() || orderBook.size() < CUP_SIZE) {
@@ -81,11 +81,18 @@ public class TradeList {
     }
 
     private void updateDensities() {
-        if (System.currentTimeMillis() - lastUpdateTime < 10_000) return;
+        if (System.currentTimeMillis() - lastUpdateTime < 20_000) return;
         lastUpdateTime = System.currentTimeMillis();
-        final var analyzer = DensityAnalyzer.getDensityAnalyzer(symbol);
-        bids.values().stream().flatMap(Set::stream).forEach(t -> t.setDensity(analyzer.getDensity(t.getQuantity())));
-        asks.values().stream().flatMap(Set::stream).forEach(t -> t.setDensity(analyzer.getDensity(t.getQuantity())));
+
+        bids.values().stream().flatMap(Set::stream)
+                .forEach(t -> t.setDensity(
+                        DensityAnalyzer.getDensity(t.getPrice(), t.getQuantity(), t.getIncline(), symbol)
+                ));
+
+        asks.values().stream().flatMap(Set::stream)
+                .forEach(t -> t.setDensity(
+                        DensityAnalyzer.getDensity(t.getPrice(), t.getQuantity(), t.getIncline(), symbol)
+                ));
     }
 
     private int getLevel(double incline) {

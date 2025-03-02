@@ -1,10 +1,10 @@
 package dev.abu.screener_backend.entity;
 
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import lombok.*;
+import lombok.Getter;
+import lombok.Setter;
 
 @Table(name = "tickers")
 @Getter
@@ -15,17 +15,13 @@ public class Ticker {
     @Id
     private String symbol;
     private double price;
-    private boolean hasSpot;
-    private boolean hasFut;
 
     public Ticker() {
     }
 
-    public Ticker(String symbol, double price, boolean hasSpot, boolean hasFut) {
+    public Ticker(String symbol, double price) {
         this.symbol = symbol.toLowerCase();
         this.price = price;
-        this.hasSpot = hasSpot;
-        this.hasFut = hasFut;
     }
 
     @Override
