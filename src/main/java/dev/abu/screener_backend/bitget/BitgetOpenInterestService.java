@@ -127,7 +127,11 @@ public class BitgetOpenInterestService {
             if (data == null) return null;
             return data.get("amount").asDouble();
         } catch (Exception e) {
-            log.error("Failed to fetch open interest data - {} ", payload, e);
+            if (payload != null && payload.contains("The symbol has been removed")) {
+                symbols.remove(symbol);
+            } else {
+                log.error("Failed to fetch open interest data - {} ", payload, e);
+            }
             return null;
         }
     }
