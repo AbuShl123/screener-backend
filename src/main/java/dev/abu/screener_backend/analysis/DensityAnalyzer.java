@@ -11,28 +11,18 @@ public class DensityAnalyzer {
         levels = new double[20];
         levels[0] = 0.5;
         levels[1] = 300_000;
-        levels[2] = 250_000;
-        levels[3] = 200_000;
 
         levels[4] = 1.0;
         levels[5] = 500_000;
-        levels[6] = 450_000;
-        levels[7] = 400_000;
 
         levels[8] = 2.0;
         levels[9] = 1_000_000;
-        levels[10] = 800_000;
-        levels[11] = 700_000;
 
         levels[12] = 5.0;
         levels[13] = 10_000_000;
-        levels[14] = 5_000_000;
-        levels[15] = 1_000_000;
 
         levels[16] = 10.0;
         levels[17] = 10_000_000;
-        levels[18] = 5_000_000;
-        levels[19] = 1_000_000;
     }
 
     public static synchronized int getDensity(double price, double qty, double incline, String symbol) {

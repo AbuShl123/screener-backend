@@ -6,10 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
-import org.springframework.web.socket.PingMessage;
-import org.springframework.web.socket.WebSocketSession;
 
-import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -68,7 +65,7 @@ public class TasksRunner implements CommandLineRunner {
             }
             log.info("Finished re-sync for {}", ws.getName());
         }
-        log.info("Finished all the chunks for {}", ( isSpot ? "spot" : "futures"));
+        log.info("Finished all the chunks for {}", (isSpot ? "spot" : "futures"));
     }
 
     private WSDepthClient startWebsocket(List<String> symbols, boolean isSpot) {
@@ -95,17 +92,6 @@ public class TasksRunner implements CommandLineRunner {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("Error while waiting: ", e);
-        }
-    }
-
-    private void sendPingMessage(String name, WebSocketSession session) {
-        if (session != null && session.isOpen()) {
-            try {
-                PingMessage pingMessage = new PingMessage(ByteBuffer.wrap("ping".getBytes()));
-                session.sendMessage(pingMessage);
-            } catch (Exception e) {
-                log.error("{} Failed to send ping message - {}", name, e.getMessage());
-            }
         }
     }
 }

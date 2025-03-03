@@ -56,9 +56,9 @@ public class TickerService {
     }
 
     /**
-     * Updates the list of all tickers and their properties/prices every 24h.
+     * Updates the list of all tickers and their prices every hour.
      */
-    @Scheduled(initialDelay = 86400000, fixedRate = 86400000)
+    @Scheduled(initialDelay = 3600000, fixedDelay = 3600000)
     public void updateTickers() {
         setPairs();
         setAllTickers();
