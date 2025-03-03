@@ -166,7 +166,6 @@ public class BitgetOpenInterestService {
             }
 
             log.info("All {} Bitget symbols are set.", symbols.size());
-            log.info("Here is a list of Bitget symbols that will be analyzed: {}", symbols);
         } catch (Exception e) {
             log.error("Failed to load all Bitget symbols", e);
         }
