@@ -36,7 +36,7 @@ public class DensityAnalyzer {
     }
 
     public static synchronized int getDensity(double price, double qty, double incline, String symbol) {
-        double percentage = Math.floor(Math.abs(incline));
+        double percentage = Math.round(Math.abs(incline));
         double value = price * qty;
         boolean largeTicker = symbol.contains("btcusdt") || symbol.contains("ethusdt");
 
