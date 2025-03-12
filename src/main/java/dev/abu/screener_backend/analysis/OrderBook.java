@@ -4,8 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.ArrayDeque;
-import java.util.Queue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -54,12 +52,12 @@ public class OrderBook {
     private void processEventConcurrently(JsonNode root) {
         isTaskScheduled = true;
         execService.submit(() -> {
-            processWithInitialSnapshot(root);
+            startProcessing(root);
             isTaskScheduled = false;
         });
     }
 
-    private void processWithInitialSnapshot(JsonNode root) {
+    private void startProcessing(JsonNode root) {
         long U = root.get("U").asLong();
         long u = root.get("u").asLong();
         processInitialSnapshot(root, U);
@@ -84,7 +82,7 @@ public class OrderBook {
             lastUpdateId = u;
             analyzeData(root, false);
             isInitialEvent = false;
-            incrementReSyncCount(websocketName);
+            incrementReSyncCount(websocketName, symbol);
             log.info("{} {} - processed initial event", websocketName, symbol);
         } else if (U > lastUpdateId) {
             startReSync();
@@ -112,7 +110,7 @@ public class OrderBook {
 
     private void startReSync() {
         isReSync = true;
-        decrementReSyncCount(websocketName);
+        decrementReSyncCount(websocketName, symbol);
         analyzer.reset();
         log.info("{} Initiating re-sync for {}", websocketName, symbol);
     }

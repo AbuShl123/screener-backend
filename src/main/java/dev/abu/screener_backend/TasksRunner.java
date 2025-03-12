@@ -20,21 +20,21 @@ import static dev.abu.screener_backend.utils.EnvParams.*;
 @Component
 public class TasksRunner implements CommandLineRunner {
 
-    private static final Map<String, Integer> reSyncCountMap = new ConcurrentHashMap<>();
+    private static final Map<String, Set<String>> reSyncCountMap = new ConcurrentHashMap<>();
 
     private final TickerService tickerService;
     private int conns = 0;
 
     public static int reSyncCount(String websocketName) {
-        return reSyncCountMap.get(websocketName);
+        return reSyncCountMap.get(websocketName).size();
     }
 
-    public static void incrementReSyncCount(String websocketName) {
-        reSyncCountMap.put(websocketName, reSyncCountMap.get(websocketName) + 1);
+    public static void incrementReSyncCount(String websocketName, String symbol) {
+        reSyncCountMap.get(websocketName).add(symbol);
     }
 
-    public static void decrementReSyncCount(String websocketName) {
-        reSyncCountMap.put(websocketName, reSyncCountMap.get(websocketName) - 1);
+    public static void decrementReSyncCount(String websocketName, String symbol) {
+        reSyncCountMap.get(websocketName).remove(symbol);
     }
 
     @Override
@@ -69,7 +69,7 @@ public class TasksRunner implements CommandLineRunner {
         wsUrl.deleteCharAt(wsUrl.length() - 1);
 
         String name = "[Depth " + (isSpot ? "spot " : "futures ") + conns + ']';
-        reSyncCountMap.put(name, 0);
+        reSyncCountMap.put(name, new HashSet<>());
         conns++;
 
         WSDepthClient ws = new WSDepthClient(name, wsUrl.toString(), isSpot, symbols.toArray(new String[0]));
