@@ -21,7 +21,6 @@ import static dev.abu.screener_backend.utils.EnvParams.*;
 public class TasksRunner implements CommandLineRunner {
 
     private static final Map<String, Integer> reSyncCountMap = new ConcurrentHashMap<>();
-    private static final Set<WSDepthClient> websockets = new HashSet<>();
 
     private final TickerService tickerService;
     private int conns = 0;
@@ -41,8 +40,6 @@ public class TasksRunner implements CommandLineRunner {
     @Override
     public void run(String... args) {
         List<String> symbols = tickerService.getAllSymbols();
-        log.info("Connecting to {} symbols", symbols.size());
-
         connectByChunks(symbols, true);
         connectByChunks(symbols, false);
     }
@@ -51,15 +48,10 @@ public class TasksRunner implements CommandLineRunner {
         int chunkSize = isSpot ? CHUNK_SIZE : CHUNK_SIZE / 2;
 
         for (int i = 0; i < symbols.size(); i += chunkSize) {
-            // get the next CHUNK_SIZE symbols
             List<String> chunk = symbols.subList(i, Math.min(i + chunkSize, symbols.size()));
-            log.info("current chunk size: {}", chunk.size());
 
-            // start websocket with the provided chunk of symbols
             var ws = startWebsocket(chunk, isSpot);
-            websockets.add(ws);
 
-            // wait until current order book finishes processing initial snapshots
             while (reSyncCount(ws.getName()) < chunk.size()) {
                 waitFor(5000L);
             }
@@ -80,7 +72,6 @@ public class TasksRunner implements CommandLineRunner {
         reSyncCountMap.put(name, 0);
         conns++;
 
-        log.info("connecting to url: {}", wsUrl);
         WSDepthClient ws = new WSDepthClient(name, wsUrl.toString(), isSpot, symbols.toArray(new String[0]));
         ws.startWebSocket();
         return ws;

@@ -22,13 +22,11 @@ public class WSOpenInterestHandler extends TextWebSocketHandler {
 
     @Override
     public synchronized void afterConnectionEstablished(@NonNull WebSocketSession session) {
-        log.info("Open Interest client connected: {}", session.getId());
         sessions.add(session);
     }
 
     @Override
     public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
-        log.info("Websocket connection closed: {}", session.getId());
         sessions.remove(session);
     }
 

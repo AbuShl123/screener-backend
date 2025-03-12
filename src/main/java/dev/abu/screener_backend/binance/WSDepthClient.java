@@ -10,14 +10,11 @@ import org.springframework.web.socket.WebSocketMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
-import java.util.concurrent.atomic.AtomicReference;
-
 @Setter
 @Slf4j
 public class WSDepthClient extends WSBinanceClient {
 
     private final OBMessageHandler messageHandler;
-    private final AtomicReference<WebSocketSession> sessionRef = new AtomicReference<>();
 
     public WSDepthClient(String name, String url, boolean isSpot, String... symbols) {
         super(name, url);
@@ -29,10 +26,6 @@ public class WSDepthClient extends WSBinanceClient {
         return new OrderBookHandler();
     }
 
-    public WebSocketSession getSession() {
-        return sessionRef.get();
-    }
-
     private class OrderBookHandler extends TextWebSocketHandler {
 
         @Override
@@ -42,8 +35,7 @@ public class WSDepthClient extends WSBinanceClient {
 
         @Override
         public void afterConnectionEstablished(@NonNull WebSocketSession session) {
-            sessionRef.set(session);
-            log.info("{} websocket connection established", websocketName);
+            log.info("{} websocket connection established with uri {}", websocketName, wsUrl);
         }
 
         @Override

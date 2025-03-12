@@ -19,13 +19,11 @@ public class OrderBook {
     private static final ExecutorService execService = Executors.newSingleThreadExecutor();
 
     private final ObjectMapper mapper = new ObjectMapper();
-    private final Queue<JsonNode> messageBuffer = new ArrayDeque<>();
     private final String websocketName;
     private final String symbol;
     private final boolean isSpot;
     private final OrderBookStream analyzer;
     private long lastUpdateId;
-    private long lastReSyncTime;
     private boolean isReSync = true;
     private boolean isInitialEvent = false;
     private boolean isTaskScheduled = false;
@@ -38,11 +36,6 @@ public class OrderBook {
     }
 
     public void process(JsonNode root) {
-        // every hour re-sync is needed.
-//        if (!isReSync && System.currentTimeMillis() - lastReSyncTime > 60 * 60 * 1000 ) {
-//            startReSync();
-//        }
-
         // if re-sync is needed and there is no any task that is queued for concurrent run,
         // then process this event concurrently to get the initial snapshot
         if (!isTaskScheduled && isReSync) {
@@ -62,7 +55,6 @@ public class OrderBook {
         isTaskScheduled = true;
         execService.submit(() -> {
             processWithInitialSnapshot(root);
-            log.info("{} {} Thread Finished", websocketName, symbol);
             isTaskScheduled = false;
         });
     }
@@ -75,26 +67,47 @@ public class OrderBook {
     }
 
     private void processEvent(JsonNode root) {
-        if (bufferNotEmpty()) {
-            bufferEvent(root);
-            root = pollEvent();
-        }
-
         long U = root.get("U").asLong();
         long u = root.get("u").asLong();
 
         if (isInitialEvent) {
             processInitialEvent(root, U, u);
+        } else if (isSpot) {
+            processSpotEvent(root, U, u);
         } else {
-            lastUpdateId = u;
-            analyzeData(root, false);
+            processFutEvent(root, u);
         }
     }
 
     private void processInitialEvent(JsonNode root, long U, long u) {
-        lastUpdateId = u;
-        analyzeData(root, false);
-        isInitialEvent = false;
+        if (lastUpdateId >= U && lastUpdateId <= u) {
+            lastUpdateId = u;
+            analyzeData(root, false);
+            isInitialEvent = false;
+            incrementReSyncCount(websocketName);
+            log.info("{} {} - processed initial event", websocketName, symbol);
+        } else if (U > lastUpdateId) {
+            startReSync();
+        }
+    }
+
+    private void processSpotEvent(JsonNode root, long U, long u) {
+        if (lastUpdateId + 1 >= U && lastUpdateId < u) {
+            lastUpdateId = u;
+            analyzeData(root, false);
+        } else {
+            startReSync();
+        }
+    }
+
+    private void processFutEvent(JsonNode root, long u) {
+        long pu = root.get("pu").asLong();
+        if (lastUpdateId == pu) {
+            lastUpdateId = u;
+            analyzeData(root, false);
+        } else {
+            startReSync();
+        }
     }
 
     private void startReSync() {
@@ -118,10 +131,8 @@ public class OrderBook {
             } while (lastUpdateId < U);
 
             analyzeData(root, true);
-            lastReSyncTime = System.currentTimeMillis();
             isReSync = false;
             isInitialEvent = true;
-            incrementReSyncCount(websocketName);
 
         } catch (Exception e) {
             log.error("{} Error processing snapshot: {}", websocketName, raw, e);
@@ -133,17 +144,5 @@ public class OrderBook {
         JsonNode asks = isSnapshot ? root.get("asks") : root.get("a");
         JsonNode bids = isSnapshot ? root.get("bids") : root.get("b");
         analyzer.analyze(root, asks, bids);
-    }
-
-    private void bufferEvent(JsonNode event) {
-        messageBuffer.offer(event);
-    }
-
-    private JsonNode pollEvent() {
-        return messageBuffer.poll();
-    }
-
-    private boolean bufferNotEmpty() {
-        return !messageBuffer.isEmpty();
     }
 }

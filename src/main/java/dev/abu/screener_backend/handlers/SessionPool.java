@@ -51,7 +51,6 @@ public class SessionPool {
             return;
         }
         sessions.add(session);
-        log.info("Order book client session created for symbols {}", symbolsMap.get(session));
     }
 
     public void clearClosedSessions() {

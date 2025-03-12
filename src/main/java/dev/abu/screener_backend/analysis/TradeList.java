@@ -13,6 +13,7 @@ import static dev.abu.screener_backend.utils.EnvParams.MAX_INCLINE;
 
 @Getter
 public class TradeList {
+    private final Map<Double, Long> backup = new HashMap<>();
     private final Map<Integer, TreeSet<Trade>> bids = new HashMap<>();
     private final Map<Integer, TreeSet<Trade>> asks = new HashMap<>();
     private final String symbol;
@@ -30,12 +31,16 @@ public class TradeList {
     }
 
     public void clear() {
+        bids.values().stream().flatMap(Set::stream).forEach(t -> backup.put(t.getPrice(), t.getLife()));
+        asks.values().stream().flatMap(Set::stream).forEach(t -> backup.put(t.getPrice(), t.getLife()));
         bids.forEach((key, value) -> value.clear());
         asks.forEach((key, value) -> value.clear());
     }
 
     void addTrade(double price, double qty, double incline, boolean isAsk, long timestamp) {
         int level = getLevel(incline);
+        long timestampFromMemory = backup.getOrDefault(price, -1L);
+        if (timestampFromMemory > 0) timestamp = timestampFromMemory;
         if (isAsk) {
             addTrade(asks.get(level), price, qty, incline, timestamp);
         } else {
@@ -58,7 +63,7 @@ public class TradeList {
             }
         }
 
-        int density = DensityAnalyzer.getDensity(price, qty, incline, symbol);
+        int density = DensityAnalyzer.getDensity(price, qty, symbol);
 
         // case when there are not enough trades in the order book
         if (orderBook.isEmpty() || orderBook.size() < CUP_SIZE) {
@@ -86,12 +91,12 @@ public class TradeList {
 
         bids.values().stream().flatMap(Set::stream)
                 .forEach(t -> t.setDensity(
-                        DensityAnalyzer.getDensity(t.getPrice(), t.getQuantity(), t.getIncline(), symbol)
+                        DensityAnalyzer.getDensity(t.getPrice(), t.getQuantity(), symbol)
                 ));
 
         asks.values().stream().flatMap(Set::stream)
                 .forEach(t -> t.setDensity(
-                        DensityAnalyzer.getDensity(t.getPrice(), t.getQuantity(), t.getIncline(), symbol)
+                        DensityAnalyzer.getDensity(t.getPrice(), t.getQuantity(), symbol)
                 ));
     }
 

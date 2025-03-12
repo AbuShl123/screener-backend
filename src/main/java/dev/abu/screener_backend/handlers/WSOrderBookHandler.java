@@ -25,7 +25,7 @@ public class WSOrderBookHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
-        log.info("Order book client session closed: {} - {}", session.getId(), status);
+
     }
 
     @Scheduled(fixedDelay = 5000)
