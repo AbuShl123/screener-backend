@@ -1,8 +1,5 @@
 package dev.abu.screener_backend.analysis;
 
-import lombok.Getter;
-
-@Getter
 public class DensityAnalyzer {
 
     private static final int[] levels = new int[]{300_000, 500_000, 1_000_000, 10_000_000};
