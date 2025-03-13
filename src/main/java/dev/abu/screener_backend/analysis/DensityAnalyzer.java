@@ -1,88 +1,16 @@
 package dev.abu.screener_backend.analysis;
 
-import lombok.Getter;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicReference;
-
 public class DensityAnalyzer {
 
-    private static final Map<String, DensityAnalyzer> analyzers = new HashMap<>();
+    private static final int[] levels = new int[]{300_000, 500_000, 1_000_000, 10_000_000};
 
-    private final String symbol;
-    private double sum;
-    private long qty;
-
-    public synchronized static DensityAnalyzer getDensityAnalyzer(String symbol) {
-        if (!analyzers.containsKey(symbol)) {
-            analyzers.put(symbol, new DensityAnalyzer(symbol));
+    public static synchronized int getDensity(double price, double qty, String symbol) {
+        double value = price * qty;
+        boolean largeTicker = symbol.startsWith("btcusdt") || symbol.startsWith("ethusdt") || symbol.startsWith("solusdt");
+        for (int i = levels.length - 1; i >= 0; i--) {
+            int limit = largeTicker ? levels[i] * 10 : levels[i];
+            if (value >= limit) return i + 1;
         }
-        return analyzers.get(symbol);
-    }
-
-    @Getter
-    private final AtomicReference<Double> firstLevel = new AtomicReference<>(-1.0);
-    @Getter
-    private final AtomicReference<Double> secondLevel = new AtomicReference<>(-1.0);
-    @Getter
-    private final AtomicReference<Double> thirdLevel = new AtomicReference<>(-1.0);
-
-    private DensityAnalyzer(String symbol) {
-        this.symbol = symbol;
-    }
-
-    public synchronized int getDensity(double data) {
-
-        if (firstLevel.get() == -1 || secondLevel.get() == -1 || thirdLevel.get() == -1) {
-            return 0;
-        }
-
-        if (data < firstLevel.get()) {
-            return 0;
-        }
-
-        if (data < secondLevel.get()) {
-            return 1;
-        }
-
-        if (data < thirdLevel.get()) {
-            return 2;
-        }
-
-        return 3;
-    }
-
-    public void analyzeDensities(double[] dataSet) {
-        int mean = calculateMean(dataSet);
-        int digits = mean == 0 ? 1 : (int) Math.pow(10, getNumOfDigits(mean));
-
-        firstLevel.set(digits * 1.0);
-        secondLevel.set(digits * 10.0);
-        thirdLevel.set(digits * 100.0);
-    }
-
-    private int calculateMean(double[] dataSet) {
-        for (double v : dataSet) {
-            if (v >= Double.MAX_VALUE - sum) sum = 0;
-            sum += v;
-            if (qty == Long.MAX_VALUE) qty = 0;
-            qty++;
-        }
-        return (int) Math.ceil(sum / qty);
-    }
-
-    private int getNumOfDigits(int num) {
-        int digits = 0;
-        while (num > 0) {
-            digits++;
-            num /= 10;
-        }
-        return digits;
-    }
-
-    @Override
-    public String toString() {
-        return "DensityAnalyzer: {symbol=" + symbol + ", firstLevel=" + firstLevel.get() + ", secondLevel=" + secondLevel.get() + ", thirdLevel=" + thirdLevel.get() + "}";
+        return 0;
     }
 }

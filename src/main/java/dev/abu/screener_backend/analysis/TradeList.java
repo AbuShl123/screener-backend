@@ -13,6 +13,7 @@ import static dev.abu.screener_backend.utils.EnvParams.MAX_INCLINE;
 
 @Getter
 public class TradeList {
+    private final Map<Double, Long> backup = new HashMap<>();
     private final Map<Integer, TreeSet<Trade>> bids = new HashMap<>();
     private final Map<Integer, TreeSet<Trade>> asks = new HashMap<>();
     private final String symbol;
@@ -30,12 +31,16 @@ public class TradeList {
     }
 
     public void clear() {
+        bids.values().stream().flatMap(Set::stream).forEach(t -> backup.put(t.getPrice(), t.getLife()));
+        asks.values().stream().flatMap(Set::stream).forEach(t -> backup.put(t.getPrice(), t.getLife()));
         bids.forEach((key, value) -> value.clear());
         asks.forEach((key, value) -> value.clear());
     }
 
-    void addTrade(String price, double qty, double incline, boolean isAsk, long timestamp) {
+    void addTrade(double price, double qty, double incline, boolean isAsk, long timestamp) {
         int level = getLevel(incline);
+        long timestampFromMemory = backup.getOrDefault(price, -1L);
+        if (timestampFromMemory > 0) timestamp = timestampFromMemory;
         if (isAsk) {
             addTrade(asks.get(level), price, qty, incline, timestamp);
         } else {
@@ -44,21 +49,21 @@ public class TradeList {
         updateDensities();
     }
 
-    private boolean addTrade(TreeSet<Trade> orderBook, String price, double qty, double incline, long timestamp) {
+    private boolean addTrade(TreeSet<Trade> orderBook, double price, double qty, double incline, long timestamp) {
         // case when price level should be removed
         if (qty == 0) {
-            return orderBook.removeIf(trade -> trade.getPrice().equals(price));
+            return orderBook.removeIf(trade -> trade.getPrice() == price);
         }
 
         // case when there is already a trade with a given price
         for (Trade trade : orderBook) {
-            if (trade.getPrice().equals(price)) {
+            if (trade.getPrice() == price) {
                 trade.setQuantity(qty);
                 return true;
             }
         }
 
-        int density = DensityAnalyzer.getDensityAnalyzer(symbol).getDensity(qty);
+        int density = DensityAnalyzer.getDensity(price, qty, symbol);
 
         // case when there are not enough trades in the order book
         if (orderBook.isEmpty() || orderBook.size() < CUP_SIZE) {
@@ -66,7 +71,7 @@ public class TradeList {
             return true;
         }
 
-        // if new trade is lower than all current trades in ob, then no need to add it
+        // if new trade is smaller than all the current trades in the list, then no need to add it
         if (orderBook.first().getQuantity() > qty) return false;
 
         // otherwise, we will add this trade
@@ -81,11 +86,18 @@ public class TradeList {
     }
 
     private void updateDensities() {
-        if (System.currentTimeMillis() - lastUpdateTime < 10_000) return;
+        if (System.currentTimeMillis() - lastUpdateTime < 20_000) return;
         lastUpdateTime = System.currentTimeMillis();
-        final var analyzer = DensityAnalyzer.getDensityAnalyzer(symbol);
-        bids.values().stream().flatMap(Set::stream).forEach(t -> t.setDensity(analyzer.getDensity(t.getQuantity())));
-        asks.values().stream().flatMap(Set::stream).forEach(t -> t.setDensity(analyzer.getDensity(t.getQuantity())));
+
+        bids.values().stream().flatMap(Set::stream)
+                .forEach(t -> t.setDensity(
+                        DensityAnalyzer.getDensity(t.getPrice(), t.getQuantity(), symbol)
+                ));
+
+        asks.values().stream().flatMap(Set::stream)
+                .forEach(t -> t.setDensity(
+                        DensityAnalyzer.getDensity(t.getPrice(), t.getQuantity(), symbol)
+                ));
     }
 
     private int getLevel(double incline) {
@@ -99,5 +111,37 @@ public class TradeList {
             level = n - (5 + ost);
         }
         return level;
+    }
+
+    public int getMaxDensity() {
+        int maxBidDensity = getMaxDensity(false);
+        int maxAskDensity = getMaxDensity(true);
+        return Math.max(maxBidDensity, maxAskDensity);
+    }
+
+    private int getMaxDensity(boolean isAsk) {
+        var trades = isAsk ? asks : bids;
+        int maxDensity = 0;
+
+        for (TreeSet<Trade> tradeList : trades.values()) {
+            if (tradeList.isEmpty()) continue;
+            Trade t = tradeList.last();
+            if (maxDensity < t.getDensity()) maxDensity = t.getDensity();
+        }
+
+        return maxDensity;
+    }
+
+    public Trade getMaxTrade(boolean isAsk) {
+        var trades = isAsk ? asks : bids;
+
+        Trade max = null;
+        for (TreeSet<Trade> tradeList : trades.values()) {
+            if (tradeList.isEmpty()) continue;
+            Trade t = tradeList.last();
+            if (max == null || max.getQuantity() < t.getQuantity()) max = t;
+        }
+
+        return max;
     }
 }

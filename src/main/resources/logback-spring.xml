@@ -5,6 +5,16 @@
     <!-- import spring's logging configurations -->
     <include resource="org/springframework/boot/logging/logback/base.xml"/>
 
+    <!-- BitGet Console Appender for only important logs -->
+    <appender name="INFO_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+        </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>INFO</level>
+        </filter>
+    </appender>
+
     <!-- Rolling File Appender for BitGet logs -->
     <appender name="BITGET_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>logs/bitget.log</file>
@@ -19,17 +29,27 @@
         <encoder>
             <pattern>${FILE_LOG_PATTERN}</pattern>
         </encoder>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>DEBUG</level>
+        </filter>
     </appender>
 
-    <!-- BitGet Console Appender for only important logs -->
-    <appender name="BITGET_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <!-- Rolling File Appender for Order Book logs -->
+    <appender name="OB_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/orderbook.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
+            <fileNamePattern>logs/orderbook.%i.log</fileNamePattern>
+            <minIndex>1</minIndex>
+            <maxIndex>1</maxIndex>
+        </rollingPolicy>
+        <triggeringPolicy class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
+            <maxFileSize>1MB</maxFileSize>
+        </triggeringPolicy>
         <encoder>
-            <pattern>${CONSOLE_LOG_PATTERN}</pattern>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
         </encoder>
-        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
             <level>DEBUG</level>
-            <onMatch>ACCEPT</onMatch>
-            <onMismatch>DENY</onMismatch>
         </filter>
     </appender>
 
@@ -38,9 +58,15 @@
         <appender-ref ref="CONSOLE"/>
     </root>
 
-    <!-- Logger for MySpecificClass -->
+    <!-- Logger for BitgetOpenInterestService -->
     <logger name="dev.abu.screener_backend.bitget.BitgetOpenInterestService" level="debug" additivity="false">
         <appender-ref ref="BITGET_FILE"/>
-        <appender-ref ref="BITGET_CONSOLE"/>
+        <appender-ref ref="INFO_CONSOLE"/>
+    </logger>
+
+    <!-- Logger for OrderBook -->
+    <logger name="dev.abu.screener_backend.analysis.OrderBook" level="debug" additivity="false">
+        <appender-ref ref="OB_FILE"/>
+        <appender-ref ref="INFO_CONSOLE"/>
     </logger>
 </configuration>

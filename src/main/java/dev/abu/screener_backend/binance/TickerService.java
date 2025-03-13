@@ -4,8 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.abu.screener_backend.entity.Ticker;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -15,12 +15,20 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import static dev.abu.screener_backend.binance.ExchangeInfoClient.getExchangeInfo;
-import static dev.abu.screener_backend.binance.TickerClient.setPrices;
+import static dev.abu.screener_backend.binance.TickerClient.*;
 
 @Slf4j
 @Service
 public class TickerService {
 
+    /**
+     * This is a hardcoded list of tickers, that don't need to be analyzed
+     */
+    public static final Set<String> garbageTickers = Set.of("bttcusdt", "usdcusdt", "fdusdusdt");
+
+    /**
+     * This is a hardcoded list of popular tickers, that preferably should come first in the list
+     */
     public static final String[] popularTickers = {
             "bnxusdt",
             "shibusdt",
@@ -33,16 +41,28 @@ public class TickerService {
             "solusdt",
             "xrpusdt",
             "ethusdt",
-            "btcusdt"
+            "btcusdt",
+            "maskusdt"
     };
 
-    /** JPA Ticker Repository to interact with a Database */
+    /**
+     * JPA Ticker Repository to interact with a Database.
+     */
     private final TickerRepository tickerRepository;
 
     public TickerService(TickerRepository tickerRepository) {
         this.tickerRepository = tickerRepository;
+        updateTickers();
+    }
+
+    /**
+     * Updates the list of all tickers and their prices every hour.
+     */
+    @Scheduled(initialDelay = 3600000, fixedDelay = 3600000)
+    public void updateTickers() {
+        setPairs();
         setAllTickers();
-        setPrices(getAllSymbols());
+        stabilizePairs(getAllSymbols());
     }
 
     /**
@@ -51,32 +71,6 @@ public class TickerService {
     public List<String> getAllSymbols() {
         var tickers = tickerRepository.findAll();
         List<String> symbols = new ArrayList<>(tickers.stream().map(Ticker::getSymbol).toList());
-        setPopularTickersFirst(symbols);
-        return symbols;
-    }
-
-    /**
-     * @return {@link List<String>} containing only spot symbols as {@link String} objects.
-     */
-    public List<String> getSpotSymbols() {
-        List<Ticker> tickers = tickerRepository.findAll();
-        List<String> symbols = tickers.stream()
-                .filter(Ticker::isHasSpot)
-                .map(Ticker::getSymbol)
-                .collect(Collectors.toCollection(ArrayList::new));
-        setPopularTickersFirst(symbols);
-        return symbols;
-    }
-
-    /**
-     * @return {@link List<String>} containing only futures symbols as {@link String} objects.
-     */
-    public List<String> getFutSymbols() {
-        List<Ticker> tickers = tickerRepository.findAll();
-        List<String> symbols = tickers.stream()
-                .filter(Ticker::isHasFut)
-                .map(Ticker::getSymbol)
-                .collect(Collectors.toCollection(ArrayList::new));
         setPopularTickersFirst(symbols);
         return symbols;
     }
@@ -91,8 +85,8 @@ public class TickerService {
     /**
      * @param symbol ticker to save to the Database.
      */
-    public void saveTicker(String symbol, boolean hasSpot, boolean hasFut) {
-        tickerRepository.save(new Ticker(symbol, hasSpot, hasFut));
+    public void saveTicker(String symbol, double price) {
+        tickerRepository.save(new Ticker(symbol, price));
     }
 
     /**
@@ -139,7 +133,7 @@ public class TickerService {
         for (JsonNode jsonNode : spotArr) {
             String status = jsonNode.get("status").asText();
             String symbol = jsonNode.get("symbol").asText().toLowerCase();
-            if (status.equals("TRADING") && symbol.endsWith("usdt")) {
+            if (status.equals("TRADING") && symbol.endsWith("usdt") && !garbageTickers.contains(symbol)) {
                 spotSymbols.add(symbol);
             }
         }
@@ -147,21 +141,23 @@ public class TickerService {
         for (JsonNode jsonNode : futArr) {
             String status = jsonNode.get("status").asText();
             String symbol = jsonNode.get("symbol").asText().toLowerCase();
-            if (status.equals("TRADING") && symbol.endsWith("usdt")) {
+            if (status.equals("TRADING") && symbol.endsWith("usdt") && !garbageTickers.contains(symbol)) {
                 futSymbols.add(symbol);
             }
         }
 
         for (String symbol : spotSymbols) {
-            boolean hasFut = futSymbols.contains(symbol);
-            saveTicker(symbol, true, hasFut);
+            if (!futSymbols.contains(symbol)) continue;
+            double price = getPrice(symbol.toLowerCase());
+            saveTicker(symbol, price);
         }
 
         log.info("Saved all {} tickers", count());
     }
 
     /**
-     * Puts all popular tickers to the front.
+     * Puts all popular tickers to the front of the list.
+     *
      * @param symbols a list to change order for.
      */
     private void setPopularTickersFirst(List<String> symbols) {

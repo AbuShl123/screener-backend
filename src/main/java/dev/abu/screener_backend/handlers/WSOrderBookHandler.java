@@ -17,7 +17,6 @@ import java.io.IOException;
 public class WSOrderBookHandler extends TextWebSocketHandler {
 
     private final SessionPool sessionPool;
-    private long lastUpdateTime;
 
     @Override
     public synchronized void afterConnectionEstablished(@NonNull WebSocketSession session) throws IOException {
@@ -26,17 +25,12 @@ public class WSOrderBookHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
-        log.info("Order book client session closed: {} - {}", session.getId(), status);
+
     }
 
-    @Scheduled(fixedRate = 1000)
+    @Scheduled(fixedDelay = 5000)
     public void sendUpdates() {
         sessionPool.clearClosedSessions();
         sessionPool.sendData();
-
-        if (System.currentTimeMillis() - lastUpdateTime > 30_000) {
-            lastUpdateTime = System.currentTimeMillis();
-            sessionPool.closeUnusedWSConnections();
-        }
     }
 }
