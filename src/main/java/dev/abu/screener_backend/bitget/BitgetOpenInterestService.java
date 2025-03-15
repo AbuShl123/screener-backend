@@ -98,14 +98,14 @@ public class BitgetOpenInterestService {
         Double price = fetchTickerPrice(symbol);
         double deltaDollars = price == null ? NaN : deltaCoins * price;
         String payload = """
-                        {
-                        "symbol": "%s",
-                        "deltaPercentage": %.2f,
-                        "deltaCoins": %f,
-                        "deltaDollars": %f,
-                        "timestamp": %d
-                        }
-                        """;
+                {
+                "symbol": "%s",
+                "deltaPercentage": %.2f,
+                "deltaCoins": %f,
+                "deltaDollars": %f,
+                "timestamp": %d
+                }
+                """;
         String data = String.format(payload, symbolName, deltaPercentage, deltaCoins, deltaDollars, timestamp);
         websocket.broadCastData(data);
         appendNewEventToHistory(data);
@@ -129,6 +129,8 @@ public class BitgetOpenInterestService {
         } catch (Exception e) {
             if (payload != null && payload.contains("The symbol has been removed")) {
                 symbols.remove(symbol);
+            } else if (payload != null && payload.contains("Parameter " + symbol.toUpperCase() + " cannot be empty")) {
+                return null;
             } else {
                 log.error("Failed to fetch open interest data - {} ", payload, e);
             }
@@ -172,7 +174,8 @@ public class BitgetOpenInterestService {
     }
 
     public synchronized String getOpenInterest(String symbol) {
-        HttpGet request = new HttpGet(BITGET_URL + "/open-interest?symbol=" + symbol);
+        String uri = BITGET_URL + "/open-interest?symbol=" + symbol;
+        HttpGet request = new HttpGet(uri);
         request.addHeader("Accept", "application/json");
 
         try (var response = httpClient.execute(request)) {

@@ -28,7 +28,7 @@ public class WSOrderBookHandler extends TextWebSocketHandler {
 
     }
 
-    @Scheduled(fixedDelay = 5000)
+    @Scheduled(fixedDelay = 1000)
     public void sendUpdates() {
         sessionPool.clearClosedSessions();
         sessionPool.sendData();
