@@ -45,10 +45,8 @@ public class TasksRunner implements CommandLineRunner {
     }
 
     private void connectByChunks(List<String> symbols, boolean isSpot) {
-        int chunkSize = isSpot ? CHUNK_SIZE : CHUNK_SIZE / 2;
-
-        for (int i = 0; i < symbols.size(); i += chunkSize) {
-            List<String> chunk = symbols.subList(i, Math.min(i + chunkSize, symbols.size()));
+        for (int i = 0; i < symbols.size(); i += CHUNK_SIZE) {
+            List<String> chunk = symbols.subList(i, Math.min(i + CHUNK_SIZE, symbols.size()));
 
             var ws = startWebsocket(chunk, isSpot);
 

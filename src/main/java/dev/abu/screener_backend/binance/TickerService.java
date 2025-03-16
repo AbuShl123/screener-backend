@@ -41,8 +41,8 @@ public class TickerService {
             "solusdt",
             "xrpusdt",
             "ethusdt",
-            "btcusdt",
-            "maskusdt"
+            "maskusdt",
+            "btcusdt"
     };
 
     /**

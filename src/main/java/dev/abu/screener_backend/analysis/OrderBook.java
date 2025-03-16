@@ -22,6 +22,7 @@ public class OrderBook {
     private final boolean isSpot;
     private final OrderBookStream analyzer;
     private long lastUpdateId;
+    private long lastResyncTime;
     private boolean isReSync = true;
     private boolean isInitialEvent = false;
     private boolean isTaskScheduled = false;
@@ -34,6 +35,10 @@ public class OrderBook {
     }
 
     public void process(JsonNode root) {
+        if (lastResyncTime > 0 && System.currentTimeMillis() - lastResyncTime >= 2 * 60 * 60 * 1000) {
+            startReSync();
+        }
+
         // if re-sync is needed and there is no any task that is queued for concurrent run,
         // then process this event concurrently to get the initial snapshot
         if (!isTaskScheduled && isReSync) {
@@ -82,6 +87,7 @@ public class OrderBook {
             lastUpdateId = u;
             analyzeData(root, false);
             isInitialEvent = false;
+            lastResyncTime = System.currentTimeMillis();
             incrementReSyncCount(websocketName, symbol);
             log.info("{} {} - processed initial event", websocketName, symbol);
         } else if (U > lastUpdateId) {
@@ -112,6 +118,7 @@ public class OrderBook {
         isReSync = true;
         decrementReSyncCount(websocketName, symbol);
         analyzer.reset();
+        lastResyncTime = 0;
         log.info("{} Initiating re-sync for {}", websocketName, symbol);
     }
 
