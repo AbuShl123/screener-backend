@@ -24,7 +24,9 @@ public class TickerClient {
     private static final Map<String, Double> pairs = new ConcurrentHashMap<>();
 
     public static synchronized double getPrice(String symbol) {
-        return pairs.get(symbol);
+        Double price = pairs.get(symbol);
+        if (price == null) return -1;
+        else return price;
     }
 
     public static void setPairs() {

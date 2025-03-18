@@ -27,25 +27,6 @@ public class TickerService {
     public static final Set<String> garbageTickers = Set.of("bttcusdt", "usdcusdt", "fdusdusdt");
 
     /**
-     * This is a hardcoded list of popular tickers, that preferably should come first in the list
-     */
-    public static final String[] popularTickers = {
-            "bnxusdt",
-            "shibusdt",
-            "avaxusdt",
-            "trxusdt",
-            "usdcusdt",
-            "adausdt",
-            "dogeusdt",
-            "bnbusdt",
-            "solusdt",
-            "xrpusdt",
-            "ethusdt",
-            "maskusdt",
-            "btcusdt"
-    };
-
-    /**
      * JPA Ticker Repository to interact with a Database.
      */
     private final TickerRepository tickerRepository;
@@ -70,9 +51,7 @@ public class TickerService {
      */
     public List<String> getAllSymbols() {
         var tickers = tickerRepository.findAll();
-        List<String> symbols = new ArrayList<>(tickers.stream().map(Ticker::getSymbol).toList());
-        setPopularTickersFirst(symbols);
-        return symbols;
+        return new ArrayList<>(tickers.stream().map(Ticker::getSymbol).toList());
     }
 
     /**
@@ -153,17 +132,5 @@ public class TickerService {
         }
 
         log.info("Saved all {} tickers", count());
-    }
-
-    /**
-     * Puts all popular tickers to the front of the list.
-     *
-     * @param symbols a list to change order for.
-     */
-    private void setPopularTickersFirst(List<String> symbols) {
-        for (String popularTicker : popularTickers) {
-            boolean isRemoved = symbols.remove(popularTicker);
-            if (isRemoved) symbols.add(0, popularTicker.toLowerCase());
-        }
     }
 }

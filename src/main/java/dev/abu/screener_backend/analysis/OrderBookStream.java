@@ -87,10 +87,6 @@ public class OrderBookStream {
         return orderBook.getMaxTrade(isAsk);
     }
 
-    public synchronized int getMaxDensity() {
-        return orderBook.getMaxDensity();
-    }
-
     private double getIncline(double price) {
         String ticker = symbol.replace(FUT_SIGN, "");
         double marketPrice = TickerClient.getPrice(ticker);

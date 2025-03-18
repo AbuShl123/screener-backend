@@ -24,38 +24,29 @@ public class MaxOrdersService {
         }
     }
 
-    private String getOnlyDensityData() {
-        StringBuilder data = new StringBuilder("{");
-
-        for (OrderBookStream stream : OrderBookStream.getAllInstances()) {
-            data.append("\"").append(stream.getSymbol()).append("\":").append(stream.getMaxDensity()).append(',');
-        }
-
-        if (data.charAt(data.length() - 1) == ',') data.deleteCharAt(data.length() - 1);
-        data.append("}");
-        return data.toString();
-    }
-
     private String getData() {
         StringBuilder array = new StringBuilder("[");
 
         for (OrderBookStream stream : OrderBookStream.getAllInstances()) {
-            Trade maxAsk = stream.getMaxTrade(true);
-            Trade maxBid = stream.getMaxTrade(false);
-            double maxBidQty = maxBid != null ? maxBid.getQuantity() : 0;
-            double maxAskQty = maxAsk != null ? maxAsk.getQuantity() : 0;
-            int bidDensity = maxBid != null ? maxBid.getDensity() : 0;
-            int askDensity = maxAsk != null ? maxAsk.getDensity() : 0;
-            double price = TickerClient.getPrice(stream.getSymbol().replace(FUT_SIGN, ""));
-
-            array
-                    .append('{')
-                    .append("\"symbol\":\"").append(stream.getSymbol()).append("\",")
-                    .append("\"maxBidQty\":").append(maxBidQty).append(",")
-                    .append("\"maxAskQty\":").append(maxAskQty).append(",")
-                    .append("\"density\":").append(Math.max(bidDensity, askDensity)).append(",")
-                    .append("\"price\":").append(price)
-                    .append("},");
+            try {
+                Trade maxAsk = stream.getMaxTrade(true);
+                Trade maxBid = stream.getMaxTrade(false);
+                double maxBidQty = maxBid != null ? maxBid.getQuantity() : 0;
+                double maxAskQty = maxAsk != null ? maxAsk.getQuantity() : 0;
+                int bidDensity = maxBid != null ? maxBid.getDensity() : 0;
+                int askDensity = maxAsk != null ? maxAsk.getDensity() : 0;
+                double price = TickerClient.getPrice(stream.getSymbol().replace(FUT_SIGN, ""));
+                array
+                        .append('{')
+                        .append("\"symbol\":\"").append(stream.getSymbol()).append("\",")
+                        .append("\"maxBidQty\":").append(maxBidQty).append(",")
+                        .append("\"maxAskQty\":").append(maxAskQty).append(",")
+                        .append("\"density\":").append(Math.max(bidDensity, askDensity)).append(",")
+                        .append("\"price\":").append(price)
+                        .append("},");
+            } catch (Exception e) {
+                log.error("Failure updating max orders for {}", stream.getSymbol(), e);
+            }
         }
 
         if (array.charAt(array.length() - 1) == ',') array.deleteCharAt(array.length() - 1);
