@@ -22,7 +22,7 @@ public class RegisterRequest {
                 .email(email)
                 .password(password)
                 .userRole(AppUserRole.USER)
-                .enabled(true)
+                .enabled(false)
                 .build();
     }
 

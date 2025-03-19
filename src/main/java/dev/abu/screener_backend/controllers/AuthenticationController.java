@@ -29,10 +29,11 @@ public class AuthenticationController {
         return service.authenticate(request);
     }
 
-    @GetMapping("confirm")
-    public String confirm(
-            @RequestParam("token") String token
+    @GetMapping("/confirm")
+    public ResponseEntity<String> confirm(
+            @RequestParam("confirmationToken") String confirmationToken,
+            @RequestParam("email") String email
     ) {
-        return service.confirmToken(token);
+        return service.confirmToken(confirmationToken, email);
     }
 }
