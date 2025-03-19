@@ -25,7 +25,7 @@ public class AuthenticationService {
 
     private static final String EMAIL_NOT_VALID_MSG = "Email is not valid.";
     private static final String EMAIL_TAKEN_MSG = "Email is taken.";
-    private static final String EMAIL_SENT_SUCCESSFULLY_MSG = "Email is sent successfully";
+    private static final String EMAIL_SENT_SUCCESSFULLY_MSG = "Email is sent successfully.";
     private final ConfirmationTokenRepository confirmationTokenRepository;
 
     @Value("${server.base-url}")
@@ -94,7 +94,7 @@ public class AuthenticationService {
 
         var registrationResponse = RegistrationResponse.builder()
                 .confirmationToken(token)
-                .status(EMAIL_SENT_SUCCESSFULLY_MSG)
+                .message(EMAIL_SENT_SUCCESSFULLY_MSG)
                 .build().create();
         return new ResponseEntity<>(registrationResponse, HttpStatus.OK);
     }

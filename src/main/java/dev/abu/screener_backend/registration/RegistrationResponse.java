@@ -9,11 +9,11 @@ import java.util.Map;
 public class RegistrationResponse {
 
     private String confirmationToken;
-    private String status;
+    private String message;
 
     public Map<String, Object> create() {
         var map = new HashMap<String, Object>();
-        map.put("status", status);
+        map.put("message", message);
         map.put("confirmationToken", confirmationToken);
         return map;
     }
