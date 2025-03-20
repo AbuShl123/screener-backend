@@ -37,13 +37,16 @@ public class TickerService {
     }
 
     /**
-     * Updates the list of all tickers and their prices every hour.
+     * Updates the list of all tickers and their prices every minute.
      */
-    @Scheduled(initialDelay = 3600000, fixedDelay = 3600000)
+    @Scheduled(initialDelay = 60_000, fixedDelay = 60_000)
     public void updateTickers() {
+        long before = System.nanoTime();
         setPairs();
         setAllTickers();
         stabilizePairs(getAllSymbols());
+        long after = System.nanoTime();
+        log.info("Updated all tickers in {} ms", (after - before) / 1_000_000);
     }
 
     /**

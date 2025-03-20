@@ -174,7 +174,7 @@ public class AuthenticationService {
                 "      <td width=\"10\" valign=\"middle\"><br></td>\n" +
                 "      <td style=\"font-family:Helvetica,Arial,sans-serif;font-size:19px;line-height:1.315789474;max-width:560px\">\n" +
                 "        \n" +
-                "            <p style=\"Margin:0 0 20px 0;font-size:19px;line-height:25px;color:#0b0c0c\">Добро пожаловать, " + name + ",</p><p style=\"Margin:0 0 20px 0;font-size:19px;line-height:25px;color:#0b0c0c\"> Спасибо что выбрали Clerk Screener! Для активации вашего аккаунта, пожалуйста перейдите по ссылке ниже: </p><blockquote style=\"Margin:0 0 20px 0;border-left:10px solid #b1b4b6;padding:15px 0 0.1px 15px;font-size:19px;line-height:25px\"><p style=\"Margin:0 0 20px 0;font-size:19px;line-height:25px;color:#0b0c0c\"> <a href=\"" + link + "\">Активировать Сейчас</a> </p></blockquote>\n Ссылка истечет через 15 минут. <p>Удачи в трейдинге!</p>" +
+                "            <p style=\"Margin:0 0 20px 0;font-size:19px;line-height:25px;color:#0b0c0c\">Добро пожаловать, " + name + ",</p><p style=\"Margin:0 0 20px 0;font-size:19px;line-height:25px;color:#0b0c0c\"> Спасибо что выбрали Clerk Screener! Для активации вашего аккаунта, пожалуйста перейдите по ссылке ниже: </p><blockquote style=\"Margin:0 0 20px 0;border-left:10px solid #b1b4b6;padding:15px 0 0.1px 15px;font-size:19px;line-height:25px\"><p style=\"Margin:0 0 20px 0;font-size:19px;line-height:25px;color:#0b0c0c\"> <a href=\"" + link + "\">Активировать Сейчас</a> </p></blockquote>\n Ссылка активна в течение 30 минут. <p>Удачи в трейдинге!</p>" +
                 "        \n" +
                 "      </td>\n" +
                 "      <td width=\"10\" valign=\"middle\"><br></td>\n" +
@@ -295,7 +295,7 @@ public class AuthenticationService {
                           <h2>Ваш аккаунт подтвержден</h2>
                           <p> Вы ввели <b>""" + email + """
                             </b> в качестве своего электронного адреса.
-                            Теперь вы можете перейти по ссылке ниже чтобы открыть скринер: </p>
+                            Теперь вы можете перейти по ссылке ниже, чтобы открыть скринер: </p>
                           <a href="http://185.39.31.76" class='button'>
                             Перейти к скринеру
                           </a>

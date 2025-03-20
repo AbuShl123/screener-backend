@@ -22,8 +22,8 @@ public abstract class WSBinanceClient {
 
     public void startWebSocket() {
         WebSocketContainer container = ContainerProvider.getWebSocketContainer();
-        // Set max message buffer size (10MB)
-        container.setDefaultMaxTextMessageBufferSize(10 * 1024 * 1024);
+        // set max buffer size: 50MB
+        container.setDefaultMaxTextMessageBufferSize(50 * 1024 * 1024);
         client = new StandardWebSocketClient(container);
         client.execute(getWebSocketHandler(), this.wsUrl);
     }
