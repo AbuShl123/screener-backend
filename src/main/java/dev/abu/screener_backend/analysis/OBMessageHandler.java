@@ -52,6 +52,7 @@ public class OBMessageHandler {
         queue.add(message.getPayload().toString());
 
         if (queue.size() % 5000 == 0) {
+            log.info("{} tasks scheduled", OrderBook.getNumOfScheduledTasks());
             log.info("{} messages are buffered", queue.size());
         }
     }
@@ -76,19 +77,24 @@ public class OBMessageHandler {
 
             JsonNode root = mapper.readTree(message);
             JsonNode data = root.get("data");
-
             JsonNode symbolNode = data.get("s");
             if (symbolNode == null) return;
             String symbol = symbolNode.asText().toLowerCase();
             var marketSymbol = symbol + (isSpot ? "" : FUT_SIGN);
 
             if (ineligibleSet.contains(marketSymbol)) return;
-
             OrderBook orderBook = getOrderBook(marketSymbol);
-            if (orderBook == null) return;
 
-            if (orderBook.isTaskScheduled()) {
+            if (orderBook == null) {
+                queue.remove(message);
+            }
+
+            else if (orderBook.isTaskScheduled()) {
                 ineligibleSet.add(symbol);
+            }
+
+            else if (orderBook.isScheduleNeeded() && OrderBook.getNumOfScheduledTasks() > 50) {
+                queue.remove(message);
             }
 
             else {

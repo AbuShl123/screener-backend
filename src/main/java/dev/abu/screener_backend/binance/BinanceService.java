@@ -155,7 +155,7 @@ public class BinanceService {
 
     private Set<String> getDeletedSymbols(Set<String> allSymbols) {
         return connectedSymbols.stream()
-                .filter(symbol -> !allSymbols.contains(symbol))
+                .filter(symbol -> !allSymbols.contains(symbol.replace(FUT_SIGN, "")))
                 .collect(Collectors.toSet());
     }
 
