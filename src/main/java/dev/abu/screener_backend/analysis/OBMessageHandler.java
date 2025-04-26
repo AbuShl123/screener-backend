@@ -30,7 +30,7 @@ public class OBMessageHandler {
      * where each message weights approximately <b>7KB</b>
      */
     private static final int QUEUE_CAPACITY = 30_000;
-    public static final int SCHEDULE_THRESHOLD = 50;
+    public static final int SCHEDULE_THRESHOLD = 10;
     private static long lastCountUpdate = System.currentTimeMillis();
     private static int totalEventCount = 0;
 
