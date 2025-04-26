@@ -10,7 +10,7 @@ import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 public abstract class WSBinanceClient {
 
     protected final String websocketName;
-    protected final String wsUrl;
+    protected String wsUrl;
     private StandardWebSocketClient client;
 
     public WSBinanceClient(String websocketName, String url) {
@@ -31,6 +31,11 @@ public abstract class WSBinanceClient {
     public void reconnect() {
         log.info("{} Attempting reconnection", websocketName);
         client.execute(getWebSocketHandler(), this.wsUrl);
+    }
+
+    public void reconnect(String url) {
+        this.wsUrl = url;
+        reconnect();
     }
 
     public String getName() {

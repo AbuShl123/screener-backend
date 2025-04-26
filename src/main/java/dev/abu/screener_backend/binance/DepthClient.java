@@ -21,6 +21,12 @@ public class DepthClient {
     private static final CloseableHttpClient httpClient = HttpClients.createDefault();
     private static int weightUsedPerMinute = 0;
 
+    /**
+     * Gets the Binance initial depth snapshot for a given symbol in spot/perpetual market.
+     * @param symbol symbol to get depth snapshot for (note: without FUT_SIGN).
+     * @param isSpot boolean to specify the market, true=spot false=futures.
+     * @return depth snapshot response from Binance API.
+     */
     public synchronized static String getInitialSnapshot(String symbol, boolean isSpot) {
         checkRateLimits(isSpot);
 
@@ -44,6 +50,11 @@ public class DepthClient {
         return null;
     }
 
+    /**
+     * Function that checks if the used API weight is close to Binance's rate limit.
+     * If the used weight is close to the limit, thread sleeps until the next minute.
+     * @param isSpot boolean to specify the market, true=spot false=futures.
+     */
     private static void checkRateLimits(boolean isSpot) {
         // Binance has api rate limits that need to be respected or otherwise the ip will be banned
         int apiRateLimit = isSpot ? SPOT_API_RATE_LIMIT : FUT_API_RATE_LIMIT;
@@ -64,6 +75,9 @@ public class DepthClient {
         }
     }
 
+    /**
+     * @return long, time that is left until the next minute begins (in milliseconds).
+     */
     private static long getMillisUntilNextMinute() {
         long currentTimeMillis = System.currentTimeMillis();
 

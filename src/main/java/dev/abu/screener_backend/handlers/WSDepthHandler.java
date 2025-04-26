@@ -14,23 +14,21 @@ import java.io.IOException;
 @Component
 @Slf4j
 @RequiredArgsConstructor
-public class WSOrderBookHandler extends TextWebSocketHandler {
+public class WSDepthHandler extends TextWebSocketHandler {
 
     private final SessionPool sessionPool;
 
     @Override
-    public synchronized void afterConnectionEstablished(@NonNull WebSocketSession session) throws IOException {
+    public synchronized void afterConnectionEstablished(@NonNull WebSocketSession session) {
         sessionPool.addSession(session);
     }
 
     @Override
-    public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
-
-    }
+    public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {}
 
     @Scheduled(fixedDelay = 1000)
     public void sendUpdates() {
-        sessionPool.clearClosedSessions();
+        sessionPool.removeClosedSessions();
         sessionPool.sendData();
     }
 }

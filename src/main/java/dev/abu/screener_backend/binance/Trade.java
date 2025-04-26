@@ -1,4 +1,4 @@
-package dev.abu.screener_backend.entity;
+package dev.abu.screener_backend.binance;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

@@ -9,6 +9,21 @@ import java.util.Objects;
 
 public class RequestUtilities {
 
+    public static final String EMAIL_NOT_VALID = "Email is not valid.";
+    public static final String EMAIL_TAKEN = "Email is taken.";
+    public static final String EMAIL_SENT_SUCCESSFULLY = "Email is sent successfully.";
+    public static final String TOKEN_NOT_FOUND = "Token not found.";
+
+    public static final String USER_NOT_FOUND = "User not found.";
+    public static final String USER_NOT_ENABLED = "User not enabled.";
+
+    public static final String USER_ALREADY_SUBSCRIBED = "User already has active subscription.";
+    public static final String USER_NOT_SUBSCRIBED = "User is not subscribed.";
+    public static final String SUBSCRIPTION_PLAN_NOT_FOUND = "Subscription plan not found.";
+    public static final String INVALID_QTY_PROVIDED = "Invalid qty amount is provided.";
+    public static final String SUBSCRIBED_SUCCESSFULLY = "Subscribed successfully.";
+    public static final String RENEWED_SUCCESSFULLY = "Subscription renewed successfully.";
+
     private RequestUtilities() {}
 
     public synchronized static Map<String, String> getQueryParams(WebSocketSession session) {

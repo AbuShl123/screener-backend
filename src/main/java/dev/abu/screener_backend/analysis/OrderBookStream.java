@@ -2,7 +2,7 @@ package dev.abu.screener_backend.analysis;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.abu.screener_backend.binance.TickerClient;
-import dev.abu.screener_backend.entity.Trade;
+import dev.abu.screener_backend.binance.Trade;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -16,7 +16,6 @@ import static java.lang.Math.abs;
 @Slf4j
 public class OrderBookStream {
 
-    private static final Map<String, OrderBookStream> streams = new HashMap<>();
     @Getter
     private final String symbol;
     private final TradeList orderBook;
@@ -28,16 +27,7 @@ public class OrderBookStream {
 
     public static synchronized OrderBookStream createInstance(String symbol) {
         var stream = new OrderBookStream(symbol);
-        streams.put(symbol, stream);
         return stream;
-    }
-
-    public static synchronized OrderBookStream getInstance(String symbol) {
-        return streams.get(symbol);
-    }
-
-    public static synchronized Collection<OrderBookStream> getAllInstances() {
-        return streams.values();
     }
 
     public void reset() {
@@ -75,12 +65,12 @@ public class OrderBookStream {
         }
     }
 
-    public synchronized List<Trade> getBids() {
-        return orderBook.getBids().values().stream().flatMap(Set::stream).collect(Collectors.toList());
+    public TreeSet<Trade> getBids() {
+        return orderBook.getBids();
     }
 
-    public synchronized List<Trade> getAsks() {
-        return orderBook.getAsks().values().stream().flatMap(Set::stream).collect(Collectors.toList());
+    public TreeSet<Trade> getAsks() {
+        return orderBook.getAsks();
     }
 
     public synchronized Trade getMaxTrade(boolean isAsk) {

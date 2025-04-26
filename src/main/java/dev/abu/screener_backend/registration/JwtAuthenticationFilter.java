@@ -1,6 +1,5 @@
-package dev.abu.screener_backend.config;
+package dev.abu.screener_backend.registration;
 
-import dev.abu.screener_backend.registration.JwtService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -54,24 +53,29 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (userEmail != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 UserDetails userDetails = userDetailsService.loadUserByUsername(userEmail);
-                if (jwtService.isTokenValid(jwt, userDetails)) {
-                    var authToken = new UsernamePasswordAuthenticationToken(
-                            userDetails,
-                            null,
-                            userDetails.getAuthorities()
-                    );
 
-                    authToken.setDetails(
-                            new WebAuthenticationDetailsSource().buildDetails(request)
-                    );
-
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                // if token is invalid then:
+                if (!jwtService.isTokenValid(jwt, userDetails)) {
+                    handleException(response, HttpStatus.UNAUTHORIZED, "Token invalid");
+                    return;
                 }
+
+                var authToken = new UsernamePasswordAuthenticationToken(
+                        userDetails,
+                        null,
+                        userDetails.getAuthorities()
+                );
+
+                authToken.setDetails(
+                        new WebAuthenticationDetailsSource().buildDetails(request)
+                );
+
+                SecurityContextHolder.getContext().setAuthentication(authToken);
             }
 
             filterChain.doFilter(request, response);
 
-        }  catch (UsernameNotFoundException e) {
+        } catch (UsernameNotFoundException e) {
             handleException(response, HttpStatus.FORBIDDEN, e.getMessage());
         } catch (Exception e) {
             handleException(response, HttpStatus.UNAUTHORIZED, e.getMessage());

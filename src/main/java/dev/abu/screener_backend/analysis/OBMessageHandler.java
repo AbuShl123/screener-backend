@@ -2,65 +2,104 @@ package dev.abu.screener_backend.analysis;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.abu.screener_backend.binance.MessageBuffer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketMessage;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
+import static dev.abu.screener_backend.binance.OBManager.getOrderBook;
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
 @Slf4j
 public class OBMessageHandler {
 
-    private static final Map<String, OrderBook> orderBooks = new HashMap<>();
+    /**
+     * In average, one message weights 7000 bytes (0.007MB).
+     * If the desired maximum size of the queue should be 210MB,
+     * then the queue capacity is approx 210MB/0.007MB = 30,000.
+     * <br> <br>
+     * The maximum weight of the queue is <b>210MB</b> with the capacity of <b>30,000</b> messages,
+     * where each message weights approximately <b>7KB</b>
+     */
+    private static final int QUEUE_CAPACITY = 30_000;
     private static long lastCountUpdate = System.currentTimeMillis();
     private static int totalEventCount = 0;
 
-    private final MessageBuffer<String> messageBuffer = new MessageBuffer<>();
+    private final ConcurrentLinkedQueue<String> queue = new ConcurrentLinkedQueue<>();
     private final ObjectMapper mapper = new ObjectMapper();
-    private final String websocketName;
     private final boolean isSpot;
 
-    public OBMessageHandler(String name, boolean isSpot, String... symbols) {
-        this.websocketName = name;
+    public OBMessageHandler(boolean isSpot) {
         this.isSpot = isSpot;
-        setAllOrderBooks(symbols);
-        messageBuffer.startProcessing(this::handleMessage);
+        ScheduledExecutorService execService = Executors.newSingleThreadScheduledExecutor();
+        execService.scheduleAtFixedRate(this::processor, 100L, 100L, TimeUnit.MILLISECONDS);
     }
 
-    public void handleMessage(WebSocketMessage<?> message) {
+    public void take(WebSocketMessage<?> message) {
         if (!(message instanceof TextMessage)) return;
-        messageBuffer.buffer(message.getPayload().toString());
-        if (messageBuffer.size() % 100 == 0)
-            log.info("{} {} messages are buffered", websocketName, messageBuffer.size());
+
+        if (queue.size() > QUEUE_CAPACITY) return;
+
+        // TODO: Optimize this by checking how many tasks are scheduled in the order book.
+        queue.add(message.getPayload().toString());
+
+        if (queue.size() % 5000 == 0) {
+            log.info("{} messages are buffered", queue.size());
+        }
     }
 
-    private synchronized void handleMessage(String message) {
+    private void processor() {
+        if (queue.isEmpty()) return;
         long start = System.nanoTime();
-        var symbol = processMessage(message);
-        analyzeEventCount();
+
+        Set<String> ineligibleSet = new HashSet<>();
+        int count = 0;
+        for (String message : queue) {
+            handleMessage(message, ineligibleSet);
+            count++;
+        }
+
         long duration = (System.nanoTime() - start) / 1_000_000;
-        if (duration > 50) log.info("{} {} Processed event in {}ms", websocketName, symbol, duration);
+        if (duration > 1000) log.info("Finished processing {} events in {}ms", count, duration);
     }
 
-    private synchronized String processMessage(String message) {
+    private void handleMessage(String message, Set<String> ineligibleSet) {
         try {
+
             JsonNode root = mapper.readTree(message);
             JsonNode data = root.get("data");
+
             JsonNode symbolNode = data.get("s");
-            if (symbolNode == null) return null;
+            if (symbolNode == null) return;
             String symbol = symbolNode.asText().toLowerCase();
             var marketSymbol = symbol + (isSpot ? "" : FUT_SIGN);
 
-            orderBooks.get(marketSymbol).process(data);
-            return marketSymbol;
+            if (ineligibleSet.contains(marketSymbol)) return;
+
+            OrderBook orderBook = getOrderBook(marketSymbol);
+            if (orderBook == null) return;
+
+            if (orderBook.isTaskScheduled()) {
+                ineligibleSet.add(symbol);
+            }
+
+            else {
+                orderBook.process(data);
+                queue.remove(message);
+                analyzeEventCount();
+            }
+
         } catch (Exception e) {
-            log.error("{} Failed to read json data - {}", websocketName, message, e);
+            log.error("Failed to read json data - {}", message, e);
         }
-        return null;
     }
 
     private static synchronized void analyzeEventCount() {
@@ -72,11 +111,49 @@ public class OBMessageHandler {
         }
     }
 
-    private void setAllOrderBooks(String... symbols) {
-        for (String symbol : symbols) {
-            var marketSymbol = symbol + (isSpot ? "" : FUT_SIGN);
-            var orderbook = new OrderBook(symbol, isSpot, websocketName);
-            orderBooks.putIfAbsent(marketSymbol, orderbook);
+    /**
+     * Prints the content of the queue as well as their eligibility status.
+     * Used for debugging, slows down the execution.
+     */
+    private void enumerateQueue() {
+        List<String> enumeratedQueue = new ArrayList<>();
+        for (String message : queue) {
+            try {
+                JsonNode root = mapper.readTree(message);
+                JsonNode data = root.get("data");
+                JsonNode symbolNode = data.get("s");
+                if (symbolNode == null) continue;
+                String symbol = symbolNode.asText().toLowerCase();
+                var marketSymbol = symbol + (isSpot ? "" : FUT_SIGN);
+                enumeratedQueue.add(marketSymbol + "=" + getOrderBook(marketSymbol).isTaskScheduled());
+            } catch (Exception e) {
+                log.warn("Failure while enumeration - {}", message, e);
+            }
         }
+        System.out.println(enumeratedQueue);
+    }
+
+    public void printQueue() {
+        for (String msg : queue) {
+            log.info(msg.substring(msg.indexOf("\"s\""), msg.indexOf("\"b\"")));
+        }
+    }
+
+    /**
+     * Runs garbage collector and prints the memory usage of the JVM.
+     */
+    private void printMemoryUsage() {
+        Runtime runtime = Runtime.getRuntime();
+
+        // Run garbage collector to get a more accurate picture
+        runtime.gc();
+
+        long totalMemory = runtime.totalMemory();     // total memory in JVM
+        long freeMemory = runtime.freeMemory();       // free memory in JVM
+        long usedMemory = totalMemory - freeMemory;   // memory actually used
+
+        System.out.println("Total Memory: " + totalMemory / (1024 * 1024) + " MB");
+        System.out.println("Free Memory: " + freeMemory / (1024 * 1024) + " MB");
+        System.out.println("Used Memory: " + usedMemory / (1024 * 1024) + " MB");
     }
 }

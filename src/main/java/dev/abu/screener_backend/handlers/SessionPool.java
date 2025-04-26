@@ -1,123 +1,64 @@
 package dev.abu.screener_backend.handlers;
 
-import dev.abu.screener_backend.analysis.OrderBookStream;
-import dev.abu.screener_backend.binance.TickerService;
-import dev.abu.screener_backend.entity.Trade;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
-import java.io.IOException;
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
-import static dev.abu.screener_backend.TasksRunner.waitFor;
-import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
+import static dev.abu.screener_backend.binance.BinanceService.isSymbolConnected;
+import static dev.abu.screener_backend.binance.BinanceService.waitFor;
 import static dev.abu.screener_backend.utils.RequestUtilities.getQueryParams;
 
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class SessionPool {
 
-    private static final String INVALID_SYMBOL_MESSAGE = """
-            {
-            "error": "The 'symbol' parameter is invalid or missing."
-            }
-            """;
+    private final DepthService depthService;
+    private final Set<WebSocketSession> sessions = new HashSet<>();
+    private final Map<String, Set<WebSocketSession>> symbolsMap = new HashMap<>();
+    private final Set<String> symbolsFlat = new HashSet<>();
 
-    /** Full list of sessions */
-    private final Set<WebSocketSession> sessions;
-
-    /** Map of session->lists */
-    private final Map<WebSocketSession, Set<String>> symbolsMap;
-
-    /** List of spot and fut symbols connected */
-    private final Set<String> symbolsFlat;
-
-    /** List of all symbols */
-    private final List<String> allSymbols;
-
-    public SessionPool(TickerService tickerService) {
-        this.sessions = new HashSet<>();
-        this.symbolsMap = new HashMap<>();
-        this.symbolsFlat = new HashSet<>();
-        this.allSymbols = tickerService.getAllSymbols();
-    }
-
-    public void addSession(WebSocketSession session) throws IOException {
-        if (!checkInputData(session)) {
-            sendMessage(session, INVALID_SYMBOL_MESSAGE);
-            session.close();
-            return;
-        }
+    public void addSession(WebSocketSession session) {
+        extractInputData(session);
         sessions.add(session);
     }
 
-    public void clearClosedSessions() {
+    public void removeClosedSessions() {
         sessions.removeIf(session -> !session.isOpen());
-        symbolsMap.entrySet().removeIf(entry -> !entry.getKey().isOpen());
-        var flatSymbols = symbolsMap.values().stream().flatMap(Set::stream).toList();
-        symbolsFlat.removeIf(symbol -> !flatSymbols.contains(symbol));
+        symbolsFlat.removeIf(symbol -> symbolsMap.get(symbol).isEmpty());
     }
 
     public void sendData() {
-        Set<String> symbols = new HashSet<>(this.symbolsFlat); // to avoid concurrent modification exception
-        Set<WebSocketSession> sessions = new HashSet<>(this.sessions);
+        if (sessions.isEmpty()) return;
+
+        // to avoid concurrent modification exception
+        Set<String> symbols = new HashSet<>(this.symbolsFlat);
 
         for (String symbol : symbols) {
-            OrderBookStream stream = OrderBookStream.getInstance(symbol);
-            if (stream == null) return;
-            var bids = stream.getBids();
-            var asks = stream.getAsks();
-
-            sessions.forEach(session -> {
-                if (symbolsMap.get(session).contains(symbol)) {
-                    broadCastData(session, symbol, bids, asks);
-                }
-            });
+            depthService.prepareData(symbol);
+            symbolsMap.get(symbol).forEach(depthService::broadCastData);
             waitFor(100);
         }
     }
 
-    private void broadCastData(WebSocketSession session, String symbol, List<Trade> bids, List<Trade> asks) {
-        try {
-            String message = String.format("""
-                    {
-                    "symbol": "%s",
-                    "b": %s,
-                    "a": %s
-                    }
-                    """, symbol, bids, asks);
-            sendMessage(session, message);
-        } catch (Exception e) {
-            log.error("{} - Couldn't broadcast data: {}", symbol, e.getMessage());
-        }
-    }
-
-    private void sendMessage(WebSocketSession session, String message) {
-        try {
-            if (!session.isOpen()) return;
-            session.sendMessage(new TextMessage(message));
-        } catch (IOException e) {
-            log.error("Couldn't send a message - {} - {}", message, e.getMessage());
-        }
-    }
-
-    private boolean checkInputData(WebSocketSession session) {
+    private void extractInputData(WebSocketSession session) {
         var queryParamsMap = getQueryParams(session);
         String symbolsStr = queryParamsMap.get("symbols");
-        if (symbolsStr == null || symbolsStr.isEmpty()) return false;
-        String[] arr = symbolsStr.split("/");
-        Set<String> set = new HashSet<>();
+        if (symbolsStr == null || symbolsStr.isEmpty()) return;
+        String[] rawSymbols = symbolsStr.split("/");
 
-        for (String s : arr) {
-            String symbol = s.trim().toLowerCase();
-            if (!allSymbols.contains(symbol.replace(FUT_SIGN, ""))) return false;
-            set.add(symbol);
+        for (String rawSymbol : rawSymbols) {
+            String symbol = rawSymbol.trim().toLowerCase();
+            if (!isSymbolConnected(symbol)) continue;
+            if (!symbolsMap.containsKey(symbol)) symbolsMap.put(symbol, new HashSet<>());
+            symbolsMap.get(symbol).add(session);
+            this.symbolsFlat.add(symbol);
         }
-
-        this.symbolsMap.put(session, set);
-        this.symbolsFlat.addAll(set);
-        return true;
     }
 }

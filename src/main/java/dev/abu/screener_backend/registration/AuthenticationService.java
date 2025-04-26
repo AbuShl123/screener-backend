@@ -19,18 +19,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import static dev.abu.screener_backend.utils.RequestUtilities.*;
+
 @Service
 @RequiredArgsConstructor
 public class AuthenticationService {
 
-    private static final String EMAIL_NOT_VALID_MSG = "Email is not valid.";
-    private static final String EMAIL_TAKEN_MSG = "Email is taken.";
-    private static final String EMAIL_SENT_SUCCESSFULLY_MSG = "Email is sent successfully.";
-    private final ConfirmationTokenRepository confirmationTokenRepository;
-
     @Value("${server.base-url}")
     private String serverBaseUrl;
 
+    private final ConfirmationTokenRepository confirmationTokenRepository;
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -41,11 +39,11 @@ public class AuthenticationService {
 
     public ResponseEntity<?> register(RegisterRequest request) {
         boolean isValidEmail = emailValidator.test(request.getEmail());
-        if (!isValidEmail) throw new IllegalStateException(EMAIL_NOT_VALID_MSG);
+        if (!isValidEmail) throw new IllegalStateException(EMAIL_NOT_VALID);
 
         var user = request.getAppUser();
         boolean userExists = appUserRepository.findByEmail( user.getEmail() ).isPresent();
-        if (userExists) throw new IllegalStateException(EMAIL_TAKEN_MSG);
+        if (userExists) throw new IllegalStateException(EMAIL_TAKEN);
 
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         appUserRepository.save(user);
@@ -55,7 +53,7 @@ public class AuthenticationService {
 
     public ResponseEntity<?> authenticate(AuthenticationRequest request) {
         var user = appUserRepository.findByEmail( request.getEmail() ).orElseThrow(
-                () -> new UsernameNotFoundException(EMAIL_NOT_VALID_MSG)
+                () -> new UsernameNotFoundException(EMAIL_NOT_VALID)
         );
 
         if (!user.isEnabled()) {
@@ -94,7 +92,7 @@ public class AuthenticationService {
 
         var registrationResponse = RegistrationResponse.builder()
                 .confirmationToken(token)
-                .message(EMAIL_SENT_SUCCESSFULLY_MSG)
+                .message(EMAIL_SENT_SUCCESSFULLY)
                 .build().create();
         return new ResponseEntity<>(registrationResponse, HttpStatus.OK);
     }
@@ -102,7 +100,7 @@ public class AuthenticationService {
     @Transactional
     public ResponseEntity<String> confirmToken(String token, String email) {
         ConfirmationToken confirmationToken = confirmationTokenService.getToken(token)
-                .orElseThrow(() -> new IllegalStateException("token not found"));
+                .orElseThrow(() -> new IllegalStateException(TOKEN_NOT_FOUND));
 
         if (confirmationToken.getConfirmedAt() != null) {
             return new ResponseEntity<>(alreadyConfirmedHtmlPage(email), HttpStatus.ACCEPTED);

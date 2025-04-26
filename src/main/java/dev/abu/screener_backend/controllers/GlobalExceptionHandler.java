@@ -2,6 +2,7 @@ package dev.abu.screener_backend.controllers;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -22,7 +23,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler
-    public ResponseEntity<Map<String, Object>> handleAnyException(RuntimeException ex) {
+    public ResponseEntity<Map<String, Object>> handleRuntimeException(RuntimeException ex) {
         Map<String, Object> response = new HashMap<>();
         response.put("error", "General error");
         response.put("message", ex.getMessage());
@@ -31,7 +32,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler
-    public ResponseEntity<Map<String, Object>> handleAnyException(IllegalStateException ex) {
+    public ResponseEntity<Map<String, Object>> handleIllegalStateException(IllegalStateException ex) {
         Map<String, Object> response = new HashMap<>();
         response.put("error", "Invalid input");
         response.put("message", ex.getMessage());
@@ -40,9 +41,18 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler
-    public ResponseEntity<Map<String, Object>> handleAnyException(UsernameNotFoundException ex) {
+    public ResponseEntity<Map<String, Object>> handleUserException(UsernameNotFoundException ex) {
         Map<String, Object> response = new HashMap<>();
         response.put("error", "Authentication failed");
+        response.put("message", ex.getMessage());
+        response.put("status", HttpStatus.FORBIDDEN.value());
+        return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
+    }
+
+    @ExceptionHandler
+    public ResponseEntity<Map<String, Object>> handleAccessException(AuthorizationDeniedException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("error", "Authorization failed");
         response.put("message", ex.getMessage());
         response.put("status", HttpStatus.FORBIDDEN.value());
         return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);

@@ -1,11 +1,13 @@
 package dev.abu.screener_backend.binance;
 
-import dev.abu.screener_backend.analysis.OrderBookStream;
-import dev.abu.screener_backend.entity.Trade;
+import dev.abu.screener_backend.analysis.OrderBook;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+
+import java.util.HashSet;
+import java.util.Set;
 
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
@@ -13,9 +15,10 @@ import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 @Slf4j
 @Component
 public class MaxOrdersService {
-    private String maxOrders;
 
-    @Scheduled(fixedRate = 60_000, initialDelay = 10_000)
+    private String maxOrders;
+    private final Set<String> maxOrderSymbols = new HashSet<>();
+
     public void updateMaxOrders() {
         try {
             maxOrders = getData();
@@ -26,26 +29,29 @@ public class MaxOrdersService {
 
     private String getData() {
         StringBuilder array = new StringBuilder("[");
+        maxOrderSymbols.clear();
 
-        for (OrderBookStream stream : OrderBookStream.getAllInstances()) {
+        for (OrderBook orderBook : OBManager.getAllOrderBooks()) {
             try {
-                Trade maxAsk = stream.getMaxTrade(true);
-                Trade maxBid = stream.getMaxTrade(false);
+                Trade maxAsk = orderBook.getMaxTrade(true);
+                Trade maxBid = orderBook.getMaxTrade(false);
                 double maxBidQty = maxBid != null ? maxBid.getQuantity() : 0;
                 double maxAskQty = maxAsk != null ? maxAsk.getQuantity() : 0;
                 int bidDensity = maxBid != null ? maxBid.getDensity() : 0;
                 int askDensity = maxAsk != null ? maxAsk.getDensity() : 0;
-                double price = TickerClient.getPrice(stream.getSymbol().replace(FUT_SIGN, ""));
+                double price = TickerClient.getPrice(orderBook.getMarketSymbol().replace(FUT_SIGN, ""));
                 array
                         .append('{')
-                        .append("\"symbol\":\"").append(stream.getSymbol()).append("\",")
+                        .append("\"symbol\":\"").append(orderBook.getMarketSymbol()).append("\",")
                         .append("\"maxBidQty\":").append(maxBidQty).append(",")
                         .append("\"maxAskQty\":").append(maxAskQty).append(",")
                         .append("\"density\":").append(Math.max(bidDensity, askDensity)).append(",")
                         .append("\"price\":").append(price)
                         .append("},");
+
+                maxOrderSymbols.add(orderBook.getMarketSymbol());
             } catch (Exception e) {
-                log.error("Failure updating max orders for {}", stream.getSymbol(), e);
+                log.error("Failure updating max orders for {}", orderBook.getMarketSymbol(), e);
             }
         }
 

@@ -12,6 +12,7 @@ import org.apache.http.util.EntityUtils;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static dev.abu.screener_backend.utils.EnvParams.SPOT_URL;
@@ -29,6 +30,10 @@ public class TickerClient {
         else return price;
     }
 
+    public static boolean exists(String symbol) {
+        return pairs.containsKey(symbol);
+    }
+
     public static void setPairs() {
         try {
             String json = getData();
@@ -43,7 +48,7 @@ public class TickerClient {
         }
     }
 
-    public static void stabilizePairs(List<String> symbols) {
+    public static void stabilizePairs(Set<String> symbols) {
         pairs.keySet().retainAll(symbols);
     }
 

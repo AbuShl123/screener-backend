@@ -1,4 +1,4 @@
-package dev.abu.screener_backend.bitget;
+package dev.abu.screener_backend.binance;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -132,7 +132,7 @@ public class BitgetOpenInterestService {
             } else if (payload != null && payload.contains("Parameter " + symbol.toUpperCase() + " cannot be empty")) {
                 return null;
             } else {
-                log.error("Failed to fetch open interest data - {} ", payload, e);
+                log.error("Failed to fetch open interest data - {} ", e.getMessage());
             }
             return null;
         }

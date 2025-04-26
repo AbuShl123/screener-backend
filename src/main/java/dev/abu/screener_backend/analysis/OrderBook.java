@@ -2,46 +2,66 @@ package dev.abu.screener_backend.analysis;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.abu.screener_backend.binance.Trade;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import static dev.abu.screener_backend.TasksRunner.decrementReSyncCount;
-import static dev.abu.screener_backend.TasksRunner.incrementReSyncCount;
+import static dev.abu.screener_backend.binance.OBManager.decrementReSyncCount;
+import static dev.abu.screener_backend.binance.OBManager.incrementReSyncCount;
 import static dev.abu.screener_backend.binance.DepthClient.getInitialSnapshot;
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
 @Slf4j
 public class OrderBook {
+
     private static final ExecutorService execService = Executors.newSingleThreadExecutor();
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final String websocketName;
-    private final String symbol;
+    @Getter private final String marketSymbol;
     private final boolean isSpot;
     private final OrderBookStream analyzer;
-    private long lastUpdateId;
-    private long lastResyncTime;
-    private boolean isReSync = true;
+    @Getter private long lastUpdateId;
+    private long lastReSyncTime;
+    @Getter private boolean isReSync = true;
     private boolean isInitialEvent = false;
-    private boolean isTaskScheduled = false;
+    @Getter private boolean isTaskScheduled = false;
 
-    public OrderBook(String symbol, boolean isSpot, String websocketName) {
-        this.symbol = symbol;
+    public OrderBook(String marketSymbol, boolean isSpot, String websocketName) {
+        this.marketSymbol = marketSymbol;
         this.isSpot = isSpot;
-        this.analyzer = OrderBookStream.createInstance(symbol + (isSpot ? "" : FUT_SIGN));
+        this.analyzer = OrderBookStream.createInstance(marketSymbol);
         this.websocketName = websocketName;
     }
 
+    public TreeSet<Trade> getBids() {
+        return analyzer.getBids();
+    }
+
+    public TreeSet<Trade> getAsks() {
+        return analyzer.getAsks();
+    }
+
+    public Trade getMaxTrade(boolean isAsk){
+        return analyzer.getMaxTrade(isAsk);
+    }
+
+    public boolean isScheduleNeeded() {
+        return !isTaskScheduled && isReSync;
+    }
+
     public void process(JsonNode root) {
-        if (lastResyncTime > 0 && System.currentTimeMillis() - lastResyncTime >= 2 * 60 * 60 * 1000) {
+        if (lastReSyncTime > 0 && System.currentTimeMillis() - lastReSyncTime >= 2 * 60 * 60 * 1000) {
             startReSync();
         }
 
-        // if re-sync is needed and there is no any task that is queued for concurrent run,
+        // if re-sync is needed and there is no task that is queued for concurrent run,
         // then process this event concurrently to get the initial snapshot
-        if (!isTaskScheduled && isReSync) {
+        if (isScheduleNeeded()) {
             processEventConcurrently(root);
         }
 
@@ -51,7 +71,7 @@ public class OrderBook {
             processEvent(root);
         }
 
-        // in any other case, events will be ignored
+        // in any other case, events will be ignored, so they should be kept in the buffer.
     }
 
     private void processEventConcurrently(JsonNode root) {
@@ -65,7 +85,7 @@ public class OrderBook {
     private void startProcessing(JsonNode root) {
         long U = root.get("U").asLong();
         long u = root.get("u").asLong();
-        processInitialSnapshot(root, U);
+        processInitialSnapshot(U);
         processInitialEvent(root, U, u);
     }
 
@@ -87,9 +107,8 @@ public class OrderBook {
             lastUpdateId = u;
             analyzeData(root, false);
             isInitialEvent = false;
-            lastResyncTime = System.currentTimeMillis();
-            incrementReSyncCount(websocketName, symbol);
-            log.info("{} {} - processed initial event", websocketName, symbol);
+            lastReSyncTime = System.currentTimeMillis();
+            incrementReSyncCount(websocketName, marketSymbol);
         } else if (U > lastUpdateId) {
             startReSync();
         }
@@ -116,13 +135,13 @@ public class OrderBook {
 
     private void startReSync() {
         isReSync = true;
-        decrementReSyncCount(websocketName, symbol);
+        decrementReSyncCount(websocketName, marketSymbol);
         analyzer.reset();
-        lastResyncTime = 0;
-        log.info("{} Initiating re-sync for {}", websocketName, symbol);
+        lastReSyncTime = 0;
+        log.info("{} Initiating re-sync for {}", websocketName, marketSymbol);
     }
 
-    private void processInitialSnapshot(JsonNode root, long U) {
+    private void processInitialSnapshot(long U) {
         String raw = null;
 
         try {
@@ -130,12 +149,12 @@ public class OrderBook {
             JsonNode snapshot;
 
             do {
-                raw = getInitialSnapshot(symbol, isSpot);
+                raw = getInitialSnapshot(marketSymbol.replace(FUT_SIGN, ""), isSpot);
                 snapshot = mapper.readTree(raw);
                 lastUpdateId = snapshot.get("lastUpdateId").asLong();
             } while (lastUpdateId < U);
 
-            analyzeData(root, true);
+            analyzeData(snapshot, true);
             isReSync = false;
             isInitialEvent = true;
 

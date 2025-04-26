@@ -3,16 +3,12 @@ package dev.abu.screener_backend.binance;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.abu.screener_backend.entity.Ticker;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static dev.abu.screener_backend.binance.ExchangeInfoClient.getExchangeInfo;
 import static dev.abu.screener_backend.binance.TickerClient.*;
@@ -33,13 +29,11 @@ public class TickerService {
 
     public TickerService(TickerRepository tickerRepository) {
         this.tickerRepository = tickerRepository;
-        updateTickers();
     }
 
     /**
-     * Updates the list of all tickers and their prices every minute.
+     * Updates the list of all tickers and their prices.
      */
-    @Scheduled(initialDelay = 60_000, fixedDelay = 60_000)
     public void updateTickers() {
         long before = System.nanoTime();
         setPairs();
@@ -52,9 +46,9 @@ public class TickerService {
     /**
      * @return {@link List<String>} containing all current symbols as {@link String} objects.
      */
-    public List<String> getAllSymbols() {
+    public Set<String> getAllSymbols() {
         var tickers = tickerRepository.findAll();
-        return new ArrayList<>(tickers.stream().map(Ticker::getSymbol).toList());
+        return new HashSet<>(tickers.stream().map(Ticker::getSymbol).toList());
     }
 
     /**
