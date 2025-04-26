@@ -30,6 +30,7 @@ public class OBMessageHandler {
      * where each message weights approximately <b>7KB</b>
      */
     private static final int QUEUE_CAPACITY = 30_000;
+    public static final int SCHEDULE_THRESHOLD = 50;
     private static long lastCountUpdate = System.currentTimeMillis();
     private static int totalEventCount = 0;
 
@@ -40,7 +41,7 @@ public class OBMessageHandler {
     public OBMessageHandler(boolean isSpot) {
         this.isSpot = isSpot;
         ScheduledExecutorService execService = Executors.newSingleThreadScheduledExecutor();
-        execService.scheduleAtFixedRate(this::processor, 100L, 100L, TimeUnit.MILLISECONDS);
+        execService.scheduleAtFixedRate(this::processor, 100L, 50L, TimeUnit.MILLISECONDS);
     }
 
     public void take(WebSocketMessage<?> message) {
@@ -93,7 +94,7 @@ public class OBMessageHandler {
                 ineligibleSet.add(symbol);
             }
 
-            else if (orderBook.isScheduleNeeded() && OrderBook.getNumOfScheduledTasks() > 50) {
+            else if (orderBook.isScheduleNeeded() && OrderBook.getNumOfScheduledTasks() > SCHEDULE_THRESHOLD) {
                 queue.remove(message);
             }
 
@@ -139,6 +140,9 @@ public class OBMessageHandler {
         System.out.println(enumeratedQueue);
     }
 
+    /**
+     * Prints the content of the queue, while extracting only the important part of the message.
+     */
     public void printQueue() {
         for (String msg : queue) {
             log.info(msg.substring(msg.indexOf("\"s\""), msg.indexOf("\"b\"")));
@@ -161,5 +165,14 @@ public class OBMessageHandler {
         System.out.println("Total Memory: " + totalMemory / (1024 * 1024) + " MB");
         System.out.println("Free Memory: " + freeMemory / (1024 * 1024) + " MB");
         System.out.println("Used Memory: " + usedMemory / (1024 * 1024) + " MB");
+    }
+
+    /**
+     * Prints the weight (in bytes) of all the messages currently in the queue
+     */
+    private void printQueueWeight() {
+        long weight = 0;
+        for (String msg : queue) weight += msg.getBytes().length;
+        log.info("Current queue weight: {} bytes", weight);
     }
 }

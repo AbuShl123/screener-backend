@@ -1,5 +1,6 @@
 package dev.abu.screener_backend.binance;
 
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.HttpGet;
@@ -20,6 +21,7 @@ public class DepthClient {
 
     private static final CloseableHttpClient httpClient = HttpClients.createDefault();
     private static int weightUsedPerMinute = 0;
+    @Getter private static boolean isDisabled;
 
     /**
      * Gets the Binance initial depth snapshot for a given symbol in spot/perpetual market.
@@ -56,21 +58,18 @@ public class DepthClient {
      * @param isSpot boolean to specify the market, true=spot false=futures.
      */
     private static void checkRateLimits(boolean isSpot) {
-        // Binance has api rate limits that need to be respected or otherwise the ip will be banned
+        // Binance has api rate limits that need to be respected otherwise the ip will be banned
         int apiRateLimit = isSpot ? SPOT_API_RATE_LIMIT : FUT_API_RATE_LIMIT;
         if (weightUsedPerMinute >= apiRateLimit) {
-
-            // wait until the next minute, so that the weight-used-per-minute gets reset
             long millisToWait = getMillisUntilNextMinute();
             log.info("Request weight is {}. Waiting for {} seconds", weightUsedPerMinute, millisToWait/1000);
-
+            isDisabled = true;
             try {
                 Thread.sleep(millisToWait);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 log.error("Thread interrupted: {}", e.getMessage());
             }
-
             weightUsedPerMinute = 0;
         }
     }
