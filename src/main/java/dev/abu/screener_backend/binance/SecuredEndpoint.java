@@ -11,8 +11,8 @@ import org.apache.http.util.EntityUtils;
 public class SecuredEndpoint {
 
     public static final String BINANCE_SPOT_URI = "https://api.binance.com";
-    public static final String API_KEY = "RynwYrkhYtJOFId02Ttt0yHjfGQsoLtGsDmiLYwYdFyEpoKTJxy5UZLiQFoZLfhn";
-    public static final String SECRET_KEY = "H9fEC24BP4D3gNtjXEt3FX93o8MtdW6zHP6jLqGkAif2KjAaY2mN3jLiwAR3QQjS";
+    public static final String API_KEY = "";
+    public static final String SECRET_KEY = "";
 
     private static final CloseableHttpClient httpClient = HttpClients.createDefault();
 

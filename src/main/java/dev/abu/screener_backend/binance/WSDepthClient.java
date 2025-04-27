@@ -1,20 +1,26 @@
 package dev.abu.screener_backend.binance;
 
 import dev.abu.screener_backend.analysis.OBMessageHandler;
+import jakarta.websocket.ContainerProvider;
+import jakarta.websocket.WebSocketContainer;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
 import org.springframework.web.socket.CloseStatus;
-import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.WebSocketMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.util.Collection;
 
 @Getter
 @Slf4j
-public class WSDepthClient extends WSBinanceClient {
+public class WSDepthClient {
+
+    protected final String websocketName;
+    protected String wsUrl;
+    private StandardWebSocketClient client;
 
     private final OBMessageHandler messageHandler;
     private final Collection<String> symbols;
@@ -22,21 +28,39 @@ public class WSDepthClient extends WSBinanceClient {
     private boolean isConnected = false;
 
     public WSDepthClient(String name, String url, OBMessageHandler messageHandler, Collection<String> symbols) {
-        super(name, url);
+        this.websocketName = name;
+        this.wsUrl = url;
         this.messageHandler = messageHandler;
         this.symbols = symbols;
-    }
-
-    @Override
-    protected WebSocketHandler getWebSocketHandler() {
-        return new OrderBookHandler();
     }
 
     public void turnOn() {
         isTurnedOn = true;
     }
 
-    private class OrderBookHandler extends TextWebSocketHandler {
+    public void startWebSocket() {
+        WebSocketContainer container = ContainerProvider.getWebSocketContainer();
+        // set max buffer size: 10MB
+        container.setDefaultMaxTextMessageBufferSize(5 * 1024 * 1024);
+        client = new StandardWebSocketClient(container);
+        client.execute(new DepthHandler(), this.wsUrl);
+    }
+
+    public void reconnect() {
+        log.info("{} Attempting reconnection", websocketName);
+        client.execute(new DepthHandler(), this.wsUrl);
+    }
+
+    public void reconnect(String url) {
+        this.wsUrl = url;
+        reconnect();
+    }
+
+    public String getName() {
+        return websocketName;
+    }
+
+    private class DepthHandler extends TextWebSocketHandler {
 
         @Override
         public void handleMessage(@NonNull WebSocketSession session, @NonNull WebSocketMessage<?> message) {

@@ -30,7 +30,7 @@ public class OBMessageHandler {
      * where each message weights approximately <b>7KB</b>
      */
     private static final int QUEUE_CAPACITY = 30_000;
-    public static final int SCHEDULE_THRESHOLD = 10;
+    public static final int SCHEDULE_THRESHOLD = 50;
     private static long lastCountUpdate = System.currentTimeMillis();
     private static int totalEventCount = 0;
 
@@ -51,6 +51,18 @@ public class OBMessageHandler {
 
         // TODO: Optimize this by checking how many tasks are scheduled in the order book.
         queue.add(message.getPayload().toString());
+
+        if (queue.size() % 5000 == 0) {
+            log.info("{} tasks scheduled", OrderBook.getNumOfScheduledTasks());
+            log.info("{} messages are buffered", queue.size());
+        }
+    }
+
+    public void take(String message) {
+        if (queue.size() > QUEUE_CAPACITY) return;
+
+        // TODO: Optimize this by checking how many tasks are scheduled in the order book.
+        queue.add(message);
 
         if (queue.size() % 5000 == 0) {
             log.info("{} tasks scheduled", OrderBook.getNumOfScheduledTasks());
