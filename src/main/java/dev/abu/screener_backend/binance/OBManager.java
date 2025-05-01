@@ -57,8 +57,9 @@ public class OBManager {
         }
     }
 
-    public synchronized static void dropOrderBooks(Collection<String> marketSymbols) {
-        for (String marketSymbol : marketSymbols) {
+    public synchronized static void dropOrderBooks(Collection<String> symbols, boolean isSpot) {
+        for (String symbol : symbols) {
+            String marketSymbol = isSpot ? symbol : symbol + FUT_SIGN;
             orderBooks.remove(marketSymbol);
         }
     }

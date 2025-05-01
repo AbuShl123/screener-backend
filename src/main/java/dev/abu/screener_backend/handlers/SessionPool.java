@@ -1,5 +1,6 @@
 package dev.abu.screener_backend.handlers;
 
+import dev.abu.screener_backend.binance.BinanceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -10,8 +11,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-import static dev.abu.screener_backend.binance.BinanceService.isSymbolConnected;
 import static dev.abu.screener_backend.binance.BinanceService.waitFor;
+import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 import static dev.abu.screener_backend.utils.RequestUtilities.getQueryParams;
 
 @Component
@@ -20,6 +21,7 @@ import static dev.abu.screener_backend.utils.RequestUtilities.getQueryParams;
 public class SessionPool {
 
     private final DepthService depthService;
+    private final BinanceService binanceService;
     private final Set<WebSocketSession> sessions = new HashSet<>();
     private final Map<String, Set<WebSocketSession>> symbolsMap = new HashMap<>();
     private final Set<String> symbolsFlat = new HashSet<>();
@@ -54,11 +56,14 @@ public class SessionPool {
         String[] rawSymbols = symbolsStr.split("/");
 
         for (String rawSymbol : rawSymbols) {
-            String symbol = rawSymbol.trim().toLowerCase();
-            if (!isSymbolConnected(symbol)) continue;
-            if (!symbolsMap.containsKey(symbol)) symbolsMap.put(symbol, new HashSet<>());
-            symbolsMap.get(symbol).add(session);
-            this.symbolsFlat.add(symbol);
+            String mSymbol = rawSymbol.trim().toLowerCase();
+            String symbol = mSymbol.replace(FUT_SIGN, "");
+            boolean isSpot = !mSymbol.endsWith(FUT_SIGN);
+            if (!binanceService.isSymbolConnected(symbol, isSpot)) continue;
+
+            if (!symbolsMap.containsKey(mSymbol)) symbolsMap.put(mSymbol, new HashSet<>());
+            symbolsMap.get(mSymbol).add(session);
+            this.symbolsFlat.add(mSymbol);
         }
     }
 }

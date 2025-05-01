@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.socket.TextMessage;
-import org.springframework.web.socket.WebSocketMessage;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -44,25 +43,10 @@ public class OBMessageHandler {
         execService.scheduleAtFixedRate(this::processor, 100L, 50L, TimeUnit.MILLISECONDS);
     }
 
-    public void take(WebSocketMessage<?> message) {
-        if (!(message instanceof TextMessage)) return;
-
+    public synchronized void take(TextMessage message) {
         if (queue.size() > QUEUE_CAPACITY) return;
 
-        // TODO: Optimize this by checking how many tasks are scheduled in the order book.
-        queue.add(message.getPayload().toString());
-
-        if (queue.size() % 5000 == 0) {
-            log.info("{} tasks scheduled", OrderBook.getNumOfScheduledTasks());
-            log.info("{} messages are buffered", queue.size());
-        }
-    }
-
-    public void take(String message) {
-        if (queue.size() > QUEUE_CAPACITY) return;
-
-        // TODO: Optimize this by checking how many tasks are scheduled in the order book.
-        queue.add(message);
+        queue.add(message.getPayload());
 
         if (queue.size() % 5000 == 0) {
             log.info("{} tasks scheduled", OrderBook.getNumOfScheduledTasks());
@@ -89,9 +73,18 @@ public class OBMessageHandler {
         try {
 
             JsonNode root = mapper.readTree(message);
-            JsonNode data = root.get("data");
-            JsonNode symbolNode = data.get("s");
-            if (symbolNode == null) return;
+            JsonNode eventType = root.get("e");
+            if (eventType == null || !eventType.asText().equals("depthUpdate")) {
+                queue.remove(message);
+                return;
+            }
+
+            JsonNode symbolNode = root.get("s");
+            if (symbolNode == null) {
+                queue.remove(message);
+                return;
+            }
+
             String symbol = symbolNode.asText().toLowerCase();
             var marketSymbol = symbol + (isSpot ? "" : FUT_SIGN);
 
@@ -111,7 +104,7 @@ public class OBMessageHandler {
             }
 
             else {
-                orderBook.process(data);
+                orderBook.process(root);
                 queue.remove(message);
                 analyzeEventCount();
             }
