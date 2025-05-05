@@ -15,13 +15,17 @@ public class Ticker {
     @Id
     private String symbol;
     private double price;
+    private boolean hasSpot;
+    private boolean hasFut;
 
     public Ticker() {
     }
 
-    public Ticker(String symbol, double price) {
+    public Ticker(String symbol, double price, boolean hasSpot, boolean hasFut) {
         this.symbol = symbol.toLowerCase();
         this.price = price;
+        this.hasSpot = hasSpot;
+        this.hasFut = hasFut;
     }
 
     @Override

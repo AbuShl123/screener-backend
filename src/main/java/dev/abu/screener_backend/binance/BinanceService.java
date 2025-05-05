@@ -31,10 +31,8 @@ public class BinanceService {
         printReSyncMap();
         tickerService.updateTickers();
         maxOrdersService.updateMaxOrders();
-
-        var symbols = tickerService.getAllSymbols();
-        spotDepthClient.subscribeToAllExistingSymbols(symbols);
-        futDepthClient.subscribeToAllExistingSymbols(symbols);
+        spotDepthClient.listenToSymbols(tickerService.getSpotSymbols());
+        futDepthClient.listenToSymbols(tickerService.getFutSymbols());
     }
 
     public boolean isSymbolConnected(String symbol, boolean isSpot) {

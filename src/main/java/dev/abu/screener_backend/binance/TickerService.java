@@ -18,7 +18,7 @@ import static dev.abu.screener_backend.binance.TickerClient.*;
 public class TickerService {
 
     /**
-     * This is a hardcoded list of tickers, that don't need to be analyzed
+     * This is a hardcoded list of tickers, that don't need to be analyzed.
      */
     public static final Set<String> garbageTickers = Set.of("bttcusdt", "usdcusdt", "fdusdusdt");
 
@@ -35,12 +35,9 @@ public class TickerService {
      * Updates the list of all tickers and their prices.
      */
     public void updateTickers() {
-        long before = System.nanoTime();
         setPairs();
         setAllTickers();
         stabilizePairs(getAllSymbols());
-        long after = System.nanoTime();
-        log.info("Updated all tickers in {} ms", (after - before) / 1_000_000);
     }
 
     /**
@@ -59,10 +56,30 @@ public class TickerService {
     }
 
     /**
-     * @param symbol ticker to save to the Database.
+     * @return {@link List<String>} containing all symbols in spot market as {@link String} objects.
      */
-    public void saveTicker(String symbol, double price) {
-        tickerRepository.save(new Ticker(symbol, price));
+    public Set<String> getSpotSymbols() {
+        var tickers = tickerRepository.findByHasSpotTrue();
+        return new HashSet<>(tickers.stream().map(Ticker::getSymbol).toList());
+    }
+
+    /**
+     * @return {@link List<String>} containing all symbols in perpetual market as {@link String} objects.
+     */
+    public Set<String> getFutSymbols() {
+        var tickers = tickerRepository.findByHasFutTrue();
+        return new HashSet<>(tickers.stream().map(Ticker::getSymbol).toList());
+    }
+
+    /**
+     * Method to save a Ticker to database.
+     * @param symbol ticker name.
+     * @param price ticker price.
+     * @param hasSpot boolean specifying whether the symbol is available in spot.
+     * @param hasFut boolean specifying whether the symbol is available in perpetual.
+     */
+    public void saveTicker(String symbol, double price, boolean hasSpot, boolean hasFut) {
+        tickerRepository.save(new Ticker(symbol, price, hasSpot, hasFut));
     }
 
     /**
@@ -122,10 +139,9 @@ public class TickerService {
             }
         }
 
-        for (String symbol : spotSymbols) {
-            if (!futSymbols.contains(symbol)) continue;
+        for (String symbol : futSymbols) {
             double price = getPrice(symbol.toLowerCase());
-            saveTicker(symbol, price);
+            saveTicker(symbol, price, spotSymbols.contains(symbol), true);
         }
 
         log.info("Saved all {} tickers", count());

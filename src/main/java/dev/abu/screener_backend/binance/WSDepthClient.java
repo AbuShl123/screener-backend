@@ -66,23 +66,65 @@ public class WSDepthClient {
         return connectedSymbols.contains(symbol);
     }
 
-    public void subscribeToAllExistingSymbols(Set<String> symbols) {
+    public void listenToSymbols(Set<String> symbols) {
         var newSymbols = getNewSymbols(symbols);
         var deletedSymbols = getDeletedSymbols(symbols);
 
         if (!newSymbols.isEmpty()) {
-            var params = buildDepthParam(newSymbols);
-            prepareOrderBooks(newSymbols, isSpot, name);
-            subscribe(params, generateId());
-            connectedSymbols.addAll(newSymbols);
+            log.info("{} Subscribing to following symbols: {}", name, newSymbols);
+            subscribeToTickers(newSymbols);
         }
 
         if (!deletedSymbols.isEmpty()) {
-            var params = buildDepthParam(deletedSymbols);
-            connectedSymbols.removeAll(deletedSymbols);
-            unsubscribe(params, generateId());
-            dropOrderBooks(deletedSymbols, isSpot);
+            log.info("{} Unsubscribing from following symbols: {}", name, deletedSymbols);
+            unsubscribeFromTickers(deletedSymbols);
         }
+    }
+
+    private void subscribeToTickers(Collection<String> symbols) {
+        // if payload is too long, websocket will disconnect
+        // therefore data will be sent in chunks of max 315 symbols
+        int chunkSize = 315;
+
+        // preparing OrderBook objects - always before opening connection
+        prepareOrderBooks(symbols, isSpot, name);
+
+        // subscribing to binance streams
+        for (int i = 0; i < symbols.size(); i += chunkSize) {
+            var chunkOfSymbols = symbols.stream()
+                    .skip(i)
+                    .limit(chunkSize)
+                    .toList();
+
+            var params = buildDepthParam(chunkOfSymbols);
+            subscribe(params, generateId());
+        }
+
+        // now adding symbols to 'connected' set
+        connectedSymbols.addAll(symbols);
+    }
+
+    private void unsubscribeFromTickers(Collection<String> symbols) {
+        // if payload is too long, websocket will disconnect
+        // therefore data will be sent in chunks of max 315 symbols
+        int chunkSize = 315;
+
+        // removing symbols from 'connected' set
+        connectedSymbols.removeAll(symbols);
+
+        // subscribing to binance streams
+        for (int i = 0; i < symbols.size(); i += chunkSize) {
+            var chunkOfSymbols = symbols.stream()
+                    .skip(i)
+                    .limit(chunkSize)
+                    .toList();
+
+            var params = buildDepthParam(chunkOfSymbols);
+            unsubscribe(params, generateId());
+        }
+
+        // dropping related order book objects to free memory.
+        dropOrderBooks(symbols, isSpot);
     }
 
     public void subscribe(Collection<String> params, String id) {
@@ -121,6 +163,10 @@ public class WSDepthClient {
         return params;
     }
 
+    private String generateId() {
+        return "" + ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE);
+    }
+
     private Set<String> getNewSymbols(Set<String> allSymbols) {
         return allSymbols.stream()
                 .filter(symbol -> !connectedSymbols.contains(symbol))
@@ -133,12 +179,7 @@ public class WSDepthClient {
                 .collect(Collectors.toSet());
     }
 
-    private String generateId() {
-        return "" + ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE);
-    }
-
     private class DepthHandler extends TextWebSocketHandler {
-
         @Override
         protected void handleTextMessage(@NonNull WebSocketSession session, @NonNull TextMessage message) {
             messageHandler.take(message);
@@ -163,6 +204,6 @@ public class WSDepthClient {
                 reconnect();
             }
         }
-
     }
+
 }
