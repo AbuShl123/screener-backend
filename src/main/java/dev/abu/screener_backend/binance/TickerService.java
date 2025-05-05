@@ -12,6 +12,7 @@ import java.util.Set;
 
 import static dev.abu.screener_backend.binance.ExchangeInfoClient.getExchangeInfo;
 import static dev.abu.screener_backend.binance.TickerClient.*;
+import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
 @Slf4j
 @Service
@@ -37,7 +38,6 @@ public class TickerService {
     public void updateTickers() {
         setPairs();
         setAllTickers();
-        stabilizePairs(getAllSymbols());
     }
 
     /**
@@ -140,8 +140,10 @@ public class TickerService {
         }
 
         for (String symbol : futSymbols) {
-            double price = getPrice(symbol.toLowerCase());
-            saveTicker(symbol, price, spotSymbols.contains(symbol), true);
+            double price = getPrice(symbol);
+            boolean hasSpot = spotSymbols.contains(symbol);
+            if (!hasSpot) price = getPrice(symbol + FUT_SIGN);
+            saveTicker(symbol, price, hasSpot, true);
         }
 
         log.info("Saved all {} tickers", count());

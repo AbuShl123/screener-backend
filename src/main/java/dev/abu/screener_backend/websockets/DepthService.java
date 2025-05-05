@@ -21,7 +21,7 @@ public class DepthService {
     public void prepareData(String mSymbol) {
         OrderBook orderBook = getOrderBook(mSymbol);
         if (orderBook == null) return;
-        double price = TickerClient.getPrice(mSymbol.replace(FUT_SIGN, ""));
+        double price = TickerClient.getPrice(mSymbol);
         var bids = orderBook.getBids();
         var asks = orderBook.getAsks();
         message = String.format("""

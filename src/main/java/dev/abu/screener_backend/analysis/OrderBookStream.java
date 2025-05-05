@@ -78,8 +78,7 @@ public class OrderBookStream {
     }
 
     private double getIncline(double price) {
-        String ticker = symbol.replace(FUT_SIGN, "");
-        double marketPrice = TickerClient.getPrice(ticker);
+        double marketPrice = TickerClient.getPrice(symbol);
         double ratio = price / marketPrice;
         return (ratio - 1) * 100;
     }

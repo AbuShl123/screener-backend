@@ -20,7 +20,8 @@ public class DepthClient {
     private static final int FUT_API_RATE_LIMIT = 2300;
 
     private static final CloseableHttpClient httpClient = HttpClients.createDefault();
-    private static int weightUsedPerMinute = 0;
+    private static int usedWeight1mSpot = 0;
+	private static int usedWeight1mFut = 0;
     @Getter private static boolean isDisabled;
 
     /**
@@ -41,7 +42,8 @@ public class DepthClient {
 
             // record the current used request weight
             String xMbxUsedWeight1m = response.getFirstHeader("x-mbx-used-weight-1m").getValue();
-            weightUsedPerMinute = Integer.parseInt(xMbxUsedWeight1m);
+            if (isSpot) usedWeight1mSpot = Integer.parseInt(xMbxUsedWeight1m);
+			else usedWeight1mFut = Integer.parseInt(xMbxUsedWeight1m);
 
             if (entity != null) {
                 return EntityUtils.toString(entity);
@@ -60,6 +62,8 @@ public class DepthClient {
     private static void checkRateLimits(boolean isSpot) {
         // Binance has api rate limits that need to be respected otherwise the ip will be banned
         int apiRateLimit = isSpot ? SPOT_API_RATE_LIMIT : FUT_API_RATE_LIMIT;
+		int weightUsedPerMinute = isSpot ? usedWeight1mSpot : usedWeight1mFut;
+		
         if (weightUsedPerMinute >= apiRateLimit) {
             long millisToWait = getMillisUntilNextMinute();
             log.info("Request weight is {}. Waiting for {} seconds", weightUsedPerMinute, millisToWait/1000);
@@ -70,7 +74,8 @@ public class DepthClient {
                 Thread.currentThread().interrupt();
                 log.error("Thread interrupted: {}", e.getMessage());
             }
-            weightUsedPerMinute = 0;
+            usedWeight1mSpot = 0;
+            usedWeight1mFut = 0;
         }
     }
 

@@ -39,7 +39,7 @@ public class MaxOrdersService {
                 double maxAskQty = maxAsk != null ? maxAsk.getQuantity() : 0;
                 int bidDensity = maxBid != null ? maxBid.getDensity() : 0;
                 int askDensity = maxAsk != null ? maxAsk.getDensity() : 0;
-                double price = TickerClient.getPrice(orderBook.getMarketSymbol().replace(FUT_SIGN, ""));
+                double price = TickerClient.getPrice(orderBook.getMarketSymbol());
                 array
                         .append('{')
                         .append("\"symbol\":\"").append(orderBook.getMarketSymbol()).append("\",")
