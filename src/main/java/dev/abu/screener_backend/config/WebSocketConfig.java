@@ -1,7 +1,7 @@
 package dev.abu.screener_backend.config;
 
-import dev.abu.screener_backend.handlers.WSDepthHandler;
-import dev.abu.screener_backend.handlers.WSOpenInterestHandler;
+import dev.abu.screener_backend.websockets.WSDepthHandler;
+import dev.abu.screener_backend.websockets.WSOpenInterestHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.*;

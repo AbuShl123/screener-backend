@@ -1,6 +1,7 @@
-package dev.abu.screener_backend.handlers;
+package dev.abu.screener_backend.websockets;
 
 import dev.abu.screener_backend.analysis.OrderBook;
+import dev.abu.screener_backend.binance.TickerClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;
@@ -9,6 +10,7 @@ import org.springframework.web.socket.WebSocketSession;
 import java.io.IOException;
 
 import static dev.abu.screener_backend.binance.OBManager.getOrderBook;
+import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
 @Slf4j
 @Service
@@ -16,20 +18,20 @@ public class DepthService {
 
     private String message;
 
-    public void prepareData(String symbol) {
-        OrderBook orderBook = getOrderBook(symbol);
+    public void prepareData(String mSymbol) {
+        OrderBook orderBook = getOrderBook(mSymbol);
         if (orderBook == null) return;
-        var lastUpdateId = orderBook.getLastUpdateId();
+        double price = TickerClient.getPrice(mSymbol.replace(FUT_SIGN, ""));
         var bids = orderBook.getBids();
         var asks = orderBook.getAsks();
         message = String.format("""
                 {
-                "symbol": "%s",
-                "u": %d,
+                "s": "%s",
+                "p": "%f",
                 "b": %s,
                 "a": %s
                 }
-                """, symbol, lastUpdateId, bids, asks);
+                """, mSymbol, price, bids, asks);
     }
 
     public void broadCastData(WebSocketSession session) {

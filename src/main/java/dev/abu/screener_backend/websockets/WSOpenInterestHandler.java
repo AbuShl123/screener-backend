@@ -1,4 +1,4 @@
-package dev.abu.screener_backend.handlers;
+package dev.abu.screener_backend.websockets;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

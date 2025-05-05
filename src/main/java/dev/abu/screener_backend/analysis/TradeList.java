@@ -26,6 +26,7 @@ public class TradeList {
     }
 
     public void clear() {
+        backup.clear();
         bids.forEach(t -> backup.put(t.getPrice(), t.getLife()));
         asks.forEach(t -> backup.put(t.getPrice(), t.getLife()));
         bids.clear();

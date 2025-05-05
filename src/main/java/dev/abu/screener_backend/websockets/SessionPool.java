@@ -1,4 +1,4 @@
-package dev.abu.screener_backend.handlers;
+package dev.abu.screener_backend.websockets;
 
 import dev.abu.screener_backend.binance.BinanceService;
 import lombok.RequiredArgsConstructor;

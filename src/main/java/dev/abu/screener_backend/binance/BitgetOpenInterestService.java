@@ -2,7 +2,7 @@ package dev.abu.screener_backend.binance;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.abu.screener_backend.handlers.WSOpenInterestHandler;
+import dev.abu.screener_backend.websockets.WSOpenInterestHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.HttpGet;
