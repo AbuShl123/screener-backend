@@ -17,6 +17,8 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
@@ -36,7 +38,7 @@ public class WSDepthClient {
     private final Set<String> connectedSymbols;
     private WebSocketSession session;
     private StandardWebSocketClient client;
-    private boolean isConnected = false;
+    private CompletableFuture<WebSocketSession> future;
 
     public WSDepthClient(String url, boolean isSpot) {
         this.name = isSpot ? "Spot" : "Futures";
@@ -52,14 +54,19 @@ public class WSDepthClient {
         // set max buffer size: 5MB
         container.setDefaultMaxTextMessageBufferSize(5 * 1024 * 1024);
         client = new StandardWebSocketClient(container);
-        client.execute(new DepthHandler(), this.wsUrl);
-        while (!isConnected) waitFor(100);
+        future = client.execute(new DepthHandler(), this.wsUrl);
+        try {
+            session = future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public void reconnect() {
         log.info("{} Attempting reconnection", name);
+        if (!future.isDone()) future.cancel(true);
         connectedSymbols.clear();
-        client.execute(new DepthHandler(), this.wsUrl);
+        future = client.execute(new DepthHandler(), this.wsUrl);
     }
 
     public boolean isSymbolConnected(String symbol) {
@@ -151,7 +158,7 @@ public class WSDepthClient {
             session.sendMessage(new TextMessage(message));
         } else {
             log.warn("{} cannot send message - no active WebSocket session", name);
-            throw new IllegalStateException("{} webSocket session is not active");
+            reconnect();
         }
     }
 
@@ -186,7 +193,6 @@ public class WSDepthClient {
 
         @Override
         public void afterConnectionEstablished(@NonNull WebSocketSession session) {
-            isConnected = true;
             WSDepthClient.this.session = session;
             log.info("{} websocket connection established with uri {}", name, wsUrl);
         }
