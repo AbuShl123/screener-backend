@@ -41,7 +41,7 @@ public class TradeList {
         } else {
             addTrade(bids, price, qty, distance, timestamp);
         }
-        updateDensities();
+        updateLevels();
     }
 
     private boolean addTrade(TreeSet<Trade> orderBook, double price, double qty, double distance, long timestamp) {
@@ -80,7 +80,7 @@ public class TradeList {
         return true;
     }
 
-    private void updateDensities() {
+    private void updateLevels() {
         if (System.currentTimeMillis() - lastUpdateTime < 20_000) return;
         lastUpdateTime = System.currentTimeMillis();
 
@@ -96,6 +96,10 @@ public class TradeList {
     public Trade getMaxTrade(boolean isAsk) {
         TreeSet<Trade> trades = isAsk ? asks : bids;
         if (trades.isEmpty()) return null;
-        return trades.last();
+        var maxTrade = trades.first();
+        for (Trade trade : trades) {
+            if (trade.getLevel() > maxTrade.getLevel()) maxTrade = trade;
+        }
+        return maxTrade;
     }
 }

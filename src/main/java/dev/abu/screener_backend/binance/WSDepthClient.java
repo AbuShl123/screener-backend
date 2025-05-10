@@ -71,7 +71,6 @@ public class WSDepthClient {
         var deletedSymbols = getDeletedSymbols(symbols);
 
         if (!newSymbols.isEmpty()) {
-            log.info("{} Subscribing to following symbols: {}", name, newSymbols);
             subscribeToTickers(newSymbols);
         }
 
