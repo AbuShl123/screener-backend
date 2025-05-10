@@ -7,9 +7,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
-import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 import static dev.abu.screener_backend.utils.EnvParams.MAX_INCLINE;
 import static java.lang.Math.abs;
 
@@ -26,8 +24,7 @@ public class OrderBookStream {
     }
 
     public static synchronized OrderBookStream createInstance(String symbol) {
-        var stream = new OrderBookStream(symbol);
-        return stream;
+        return new OrderBookStream(symbol);
     }
 
     public void reset() {
@@ -54,14 +51,14 @@ public class OrderBookStream {
         for (JsonNode node : array) {
             var price = node.get(0).asDouble();
             var qty = node.get(1).asDouble();
-            filterByRange(price, qty, isAsk, timestamp);
+            filterByDistance(price, qty, isAsk, timestamp);
         }
     }
 
-    private void filterByRange(double price, double qty, boolean isAsk, long timestamp) {
-        double incline = getIncline(price);
-        if (abs(incline) <= MAX_INCLINE) {
-            orderBook.addTrade(price, qty, incline, isAsk, timestamp);
+    private void filterByDistance(double price, double qty, boolean isAsk, long timestamp) {
+        double distance = getDistance(price);
+        if (abs(distance) <= MAX_INCLINE) {
+            orderBook.addTrade(price, qty, distance, isAsk, timestamp);
         }
     }
 
@@ -77,7 +74,7 @@ public class OrderBookStream {
         return orderBook.getMaxTrade(isAsk);
     }
 
-    private double getIncline(double price) {
+    private double getDistance(double price) {
         double marketPrice = TickerClient.getPrice(symbol);
         double ratio = price / marketPrice;
         return (ratio - 1) * 100;

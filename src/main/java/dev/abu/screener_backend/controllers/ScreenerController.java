@@ -37,6 +37,13 @@ public class ScreenerController {
                 .body(maxOrdersService.getMaxOrders());
     }
 
+    @GetMapping("/depth")
+    public ResponseEntity<String> getDepth() {
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(maxOrdersService.getDepthData());
+    }
+
     @GetMapping("/openInterest")
     public ResponseEntity<String> getOpenInterest() {
         return ResponseEntity.ok()

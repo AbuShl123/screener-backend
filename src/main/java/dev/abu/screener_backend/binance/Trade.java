@@ -17,8 +17,8 @@ public class Trade implements Comparable<Trade>, Serializable {
 
     private double price;
     private double quantity;
-    private double incline;
-    private int density;
+    private double distance;
+    private int level;
     private long life;
 
     @Override
@@ -49,7 +49,7 @@ public class Trade implements Comparable<Trade>, Serializable {
                 %d
                 ]""",
 
-                price, quantity, incline, density, life
+                price, quantity, distance, level, life
         );
     }
 }

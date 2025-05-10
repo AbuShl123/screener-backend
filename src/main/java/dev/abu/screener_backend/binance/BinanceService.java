@@ -31,6 +31,7 @@ public class BinanceService {
         printReSyncMap();
         tickerService.updateTickers();
         maxOrdersService.updateMaxOrders();
+        maxOrdersService.updateDepthData();
         spotDepthClient.listenToSymbols(tickerService.getSpotSymbols());
         futDepthClient.listenToSymbols(tickerService.getFutSymbols());
     }

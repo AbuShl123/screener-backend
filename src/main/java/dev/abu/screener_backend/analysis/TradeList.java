@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeSet;
 
-import static dev.abu.screener_backend.analysis.DensityAnalyzer.getDensity;
+import static dev.abu.screener_backend.analysis.DensityAnalyzer.getLevel;
 import static dev.abu.screener_backend.utils.EnvParams.CUP_SIZE;
 
 @Getter
@@ -33,18 +33,18 @@ public class TradeList {
         asks.clear();
     }
 
-    void addTrade(double price, double qty, double incline, boolean isAsk, long timestamp) {
+    void addTrade(double price, double qty, double distance, boolean isAsk, long timestamp) {
         long timestampFromMemory = backup.getOrDefault(price, -1L);
         if (timestampFromMemory > 0) timestamp = timestampFromMemory;
         if (isAsk) {
-            addTrade(asks, price, qty, incline, timestamp);
+            addTrade(asks, price, qty, distance, timestamp);
         } else {
-            addTrade(bids, price, qty, incline, timestamp);
+            addTrade(bids, price, qty, distance, timestamp);
         }
         updateDensities();
     }
 
-    private boolean addTrade(TreeSet<Trade> orderBook, double price, double qty, double incline, long timestamp) {
+    private boolean addTrade(TreeSet<Trade> orderBook, double price, double qty, double distance, long timestamp) {
         // case when price level should be removed
         if (qty == 0) {
             return orderBook.removeIf(trade -> trade.getPrice() == price);
@@ -58,11 +58,11 @@ public class TradeList {
             }
         }
 
-        int density = getDensity(price, qty, symbol);
+        int level = getLevel(price, qty, distance, symbol);
 
         // case when there are not enough trades in the order book
         if (orderBook.isEmpty() || orderBook.size() < CUP_SIZE) {
-            orderBook.add(new Trade(price, qty, incline, density, timestamp));
+            orderBook.add(new Trade(price, qty, distance, level, timestamp));
             return true;
         }
 
@@ -70,7 +70,7 @@ public class TradeList {
         if (orderBook.first().getQuantity() > qty) return false;
 
         // otherwise, we will add this trade
-        orderBook.add(new Trade(price, qty, incline, density, timestamp));
+        orderBook.add(new Trade(price, qty, distance, level, timestamp));
 
         // making sure that size won't exceed the given cup size
         if (orderBook.size() > CUP_SIZE) {
@@ -84,12 +84,12 @@ public class TradeList {
         if (System.currentTimeMillis() - lastUpdateTime < 20_000) return;
         lastUpdateTime = System.currentTimeMillis();
 
-        bids.forEach(t -> t.setDensity(
-                getDensity(t.getPrice(), t.getQuantity(), symbol)
+        bids.forEach(t -> t.setLevel(
+                getLevel(t.getPrice(), t.getQuantity(), t.getDistance(), symbol)
         ));
 
-        asks.forEach(t -> t.setDensity(
-                getDensity(t.getPrice(), t.getQuantity(), symbol)
+        asks.forEach(t -> t.setLevel(
+                getLevel(t.getPrice(), t.getQuantity(), t.getDistance(), symbol)
         ));
     }
 
