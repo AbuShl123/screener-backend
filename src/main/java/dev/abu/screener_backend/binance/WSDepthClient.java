@@ -78,11 +78,12 @@ public class WSDepthClient {
         var deletedSymbols = getDeletedSymbols(symbols);
 
         if (!newSymbols.isEmpty()) {
+            log.info("{} subscribing to {} symbols", name, newSymbols.size());
             subscribeToTickers(newSymbols);
         }
 
         if (!deletedSymbols.isEmpty()) {
-            log.info("{} Unsubscribing from following symbols: {}", name, deletedSymbols);
+            log.info("{} unsubscribing from {} symbols: {}", name, deletedSymbols.size(), deletedSymbols);
             unsubscribeFromTickers(deletedSymbols);
         }
     }

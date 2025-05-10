@@ -45,7 +45,7 @@ public class SessionPool {
         for (String symbol : symbols) {
             depthService.prepareData(symbol);
             symbolsMap.get(symbol).forEach(depthService::broadCastData);
-            waitFor(100);
+            waitFor(50);
         }
     }
 

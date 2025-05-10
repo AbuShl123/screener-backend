@@ -48,7 +48,7 @@ public class OBMessageHandler {
 
         queue.add(message.getPayload());
 
-        if (queue.size() % 5000 == 0) {
+        if (queue.size() % 10000 == 0) {
             log.info("{} tasks scheduled", OrderBook.getNumOfScheduledTasks());
             log.info("{} messages are buffered", queue.size());
         }
