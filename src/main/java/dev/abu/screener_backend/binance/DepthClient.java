@@ -8,6 +8,9 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
+
 import static dev.abu.screener_backend.utils.EnvParams.FUT_URL;
 import static dev.abu.screener_backend.utils.EnvParams.SPOT_URL;
 
@@ -20,9 +23,12 @@ public class DepthClient {
     private static final int FUT_API_RATE_LIMIT = 2300;
 
     private static final CloseableHttpClient httpClient = HttpClients.createDefault();
-    private static int usedWeight1mSpot = 0;
-	private static int usedWeight1mFut = 0;
-    @Getter private static boolean isDisabled;
+
+    private static final AtomicInteger usedWeight1mSpot = new AtomicInteger(0);
+    private static final AtomicInteger usedWeight1mFut = new AtomicInteger(0);
+
+    private static final ReentrantLock spotLock = new ReentrantLock();
+    private static final ReentrantLock futLock = new ReentrantLock();
 
     /**
      * Gets the Binance initial depth snapshot for a given symbol in spot/perpetual market.
@@ -30,26 +36,37 @@ public class DepthClient {
      * @param isSpot boolean to specify the market, true=spot false=futures.
      * @return depth snapshot response from Binance API.
      */
-    public synchronized static String getInitialSnapshot(String symbol, boolean isSpot) {
-        checkRateLimits(isSpot);
+    public static String getInitialSnapshot(String symbol, boolean isSpot) {
+        ReentrantLock lock = isSpot ? spotLock : futLock;
+        lock.lock();
+        try {
+            checkRateLimits(isSpot);
 
-        String baseUri = isSpot ? SPOT_URL : FUT_URL;
-        HttpGet depthRequest = new HttpGet(baseUri + "/depth?symbol=" + symbol.toUpperCase() + "&limit=1000");
-        depthRequest.addHeader("Accept", "application/json");
+            String baseUri = isSpot ? SPOT_URL : FUT_URL;
+            HttpGet depthRequest = new HttpGet(baseUri + "/depth?symbol=" + symbol.toUpperCase() + "&limit=1000");
+            depthRequest.addHeader("Accept", "application/json");
 
-        try (var response = httpClient.execute(depthRequest)) {
-            HttpEntity entity = response.getEntity();
+            try (var response = httpClient.execute(depthRequest)) {
+                HttpEntity entity = response.getEntity();
 
-            // record the current used request weight
-            String xMbxUsedWeight1m = response.getFirstHeader("x-mbx-used-weight-1m").getValue();
-            if (isSpot) usedWeight1mSpot = Integer.parseInt(xMbxUsedWeight1m);
-			else usedWeight1mFut = Integer.parseInt(xMbxUsedWeight1m);
+                // record the current used request weight
+                String xMbxUsedWeight1m = response.getFirstHeader("x-mbx-used-weight-1m").getValue();
+                int usedWeight = Integer.parseInt(xMbxUsedWeight1m);
+                if (isSpot) {
+                    usedWeight1mSpot.set(usedWeight);
+                } else {
+                    usedWeight1mFut.set(usedWeight);
+                }
 
-            if (entity != null) {
-                return EntityUtils.toString(entity);
+                if (entity != null) {
+                    return EntityUtils.toString(entity);
+                }
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to send request for depth snapshot: " + e.getMessage(), e);
             }
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to send request for depth snapshot: " + e.getMessage());
+
+        } finally {
+            lock.unlock();
         }
         return null;
     }
@@ -60,22 +77,23 @@ public class DepthClient {
      * @param isSpot boolean to specify the market, true=spot false=futures.
      */
     private static void checkRateLimits(boolean isSpot) {
-        // Binance has api rate limits that need to be respected otherwise the ip will be banned
         int apiRateLimit = isSpot ? SPOT_API_RATE_LIMIT : FUT_API_RATE_LIMIT;
-		int weightUsedPerMinute = isSpot ? usedWeight1mSpot : usedWeight1mFut;
-		
-        if (weightUsedPerMinute >= apiRateLimit) {
+        int weightUsed = isSpot ? usedWeight1mSpot.get() : usedWeight1mFut.get();
+
+        if (weightUsed >= apiRateLimit) {
             long millisToWait = getMillisUntilNextMinute();
-            log.info("Request weight is {}. Waiting for {} seconds", weightUsedPerMinute, millisToWait/1000);
-            isDisabled = true;
+            log.info("Request weight is {}. Waiting for {} seconds", weightUsed, millisToWait / 1000);
+
             try {
                 Thread.sleep(millisToWait);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                log.error("Thread interrupted: {}", e.getMessage());
+                log.error("Thread interrupted during rate limit wait: {}", e.getMessage());
             }
-            usedWeight1mSpot = 0;
-            usedWeight1mFut = 0;
+
+            // reset counters after sleep
+            usedWeight1mSpot.set(0);
+            usedWeight1mFut.set(0);
         }
     }
 
@@ -84,24 +102,14 @@ public class DepthClient {
      */
     private static long getMillisUntilNextMinute() {
         long currentTimeMillis = System.currentTimeMillis();
+        long millisecondsInMinute = 60_000;
+        long elapsed = currentTimeMillis % millisecondsInMinute;
+        long result = millisecondsInMinute - elapsed + 2000;
 
-        // Calculate milliseconds left until the next minute
-        long millisecondsInSecond = 1000;
-        long secondsInMinute = 60;
-        long millisecondsInMinute = secondsInMinute * millisecondsInSecond;
-
-        // Calculate elapsed milliseconds within the current minute
-        long elapsedMillisecondsInMinute = currentTimeMillis % millisecondsInMinute;
-
-        // Calculate remaining milliseconds until the next minute and add 2 seconds just in case...
-        long result = millisecondsInMinute - elapsedMillisecondsInMinute + 2000;
-
-        // in case if we need to wait for 1min,
-        // then it's kinda wierd, so just waiting for 2 seconds will be enough
+        // avoid waiting too long
         if (result >= 60_000) {
-            return 2;
+            return 2000;
         }
-
         return result;
     }
 }
