@@ -23,10 +23,10 @@ public class Trade implements Comparable<Trade>, Serializable {
 
     @Override
     public int compareTo(Trade another) {
-        double qty1 = getQuantity();
-        double qty2 = another.getQuantity();
-        if (qty1 == qty2) return 1;
-        return (int) (qty1 - qty2);
+        double t1 = getLevel();
+        double t2 = another.getLevel();
+        if (t1 == t2) return 1;
+        return (int) (t1 - t2);
     }
 
     @Override

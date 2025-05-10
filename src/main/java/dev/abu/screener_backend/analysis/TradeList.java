@@ -67,7 +67,7 @@ public class TradeList {
         }
 
         // if new trade is smaller than all the current trades in the list, then no need to add it
-        if (orderBook.first().getQuantity() > qty) return false;
+        if (orderBook.first().getLevel() >= level) return false;
 
         // otherwise, we will add this trade
         orderBook.add(new Trade(price, qty, distance, level, timestamp));
@@ -96,10 +96,6 @@ public class TradeList {
     public Trade getMaxTrade(boolean isAsk) {
         TreeSet<Trade> trades = isAsk ? asks : bids;
         if (trades.isEmpty()) return null;
-        var maxTrade = trades.first();
-        for (Trade trade : trades) {
-            if (trade.getLevel() > maxTrade.getLevel()) maxTrade = trade;
-        }
-        return maxTrade;
+        return trades.last();
     }
 }
