@@ -44,7 +44,7 @@ public class OBMessageHandler {
     }
 
     public synchronized void take(TextMessage message) {
-        if (queue.size() > QUEUE_CAPACITY) return;
+        if (queue.size() > QUEUE_CAPACITY) queue.clear();
 
         queue.add(message.getPayload());
 

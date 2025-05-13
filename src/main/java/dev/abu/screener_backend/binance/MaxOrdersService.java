@@ -48,7 +48,7 @@ public class MaxOrdersService {
             double maxAskQty = maxAsk != null ? maxAsk.getQuantity() : 0;
             int bidDensity = maxBid != null ? maxBid.getLevel() : 0;
             int askDensity = maxAsk != null ? maxAsk.getLevel() : 0;
-            double price = TickerClient.getPrice(orderBook.getMarketSymbol());
+            double price = TickerService.getPrice(orderBook.getMarketSymbol());
 
             ObjectNode obj = mapper.createObjectNode();
             obj.put("symbol", orderBook.getMarketSymbol());
@@ -73,18 +73,18 @@ public class MaxOrdersService {
 
         for (OrderBook orderbook : OBManager.getAllOrderBooks()) {
             ObjectNode obj = mapper.createObjectNode();
-            TreeSet<Trade> bids = orderbook.getBids();
-            TreeSet<Trade> asks = orderbook.getAsks();
+            TreeSet<Trade> densities = orderbook.getBids();
+            densities.addAll(orderbook.getAsks());
             var symbol = orderbook.getMarketSymbol();
-            double price = TickerClient.getPrice(orderbook.getMarketSymbol());
+            double price = TickerService.getPrice(orderbook.getMarketSymbol());
             obj.put("symbol", symbol);
             obj.put("price", price);
-            obj.set("bids", serializeTrades(bids));
-            obj.set("asks", serializeTrades(asks));
+            obj.set("densities", serializeTrades(densities));
             arrayNode.add(obj);
         }
 
         String jsonString = "[]";
+
         try {
             jsonString = mapper.writeValueAsString(arrayNode);
         } catch (Exception e) {
@@ -99,8 +99,6 @@ public class MaxOrdersService {
             ArrayNode innerArray = mapper.createArrayNode();
             innerArray.add(trade.getPrice());
             innerArray.add(trade.getQuantity());
-            innerArray.add(trade.getDistance());
-            innerArray.add(trade.getLevel());
             outerArray.add(innerArray);
         }
         return outerArray;

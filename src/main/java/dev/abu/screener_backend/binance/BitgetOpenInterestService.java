@@ -20,7 +20,7 @@ import static java.lang.Double.NaN;
 @Service
 public class BitgetOpenInterestService {
 
-    private static LinkedList<String> history = new LinkedList<>();
+    private static final LinkedList<String> history = new LinkedList<>();
     private static final long UPDATE_INTERVAL = 2 * 60 * 1000;
     private static final double INTEREST_THRESHOLD = 5.00;
     private static final String BITGET_URL = "https://api.bitget.com/api/mix/v1/market";
@@ -81,7 +81,7 @@ public class BitgetOpenInterestService {
             // calculate how much the OI dropped/rose from the last time
             double deltaPercentage = ((currentInterest - pastInterest) / pastInterest) * 100;
 
-            // if the delta to above the 5%, then broadcast it.
+            // if delta is above 5%, then broadcast it.
             if (deltaPercentage > INTEREST_THRESHOLD) {
                 broadcastData(deltaPercentage, currentInterest, pastInterest, symbol);
             }
@@ -99,6 +99,7 @@ public class BitgetOpenInterestService {
         double deltaDollars = price == null ? NaN : deltaCoins * price;
         String payload = """
                 {
+                "n": "OI",
                 "symbol": "%s",
                 "deltaPercentage": %.2f,
                 "deltaCoins": %f,

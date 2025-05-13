@@ -1,7 +1,7 @@
 package dev.abu.screener_backend.analysis;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import dev.abu.screener_backend.binance.TickerClient;
+import dev.abu.screener_backend.binance.TickerService;
 import dev.abu.screener_backend.binance.Trade;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -75,7 +75,7 @@ public class OrderBookStream {
     }
 
     private double getDistance(double price) {
-        double marketPrice = TickerClient.getPrice(symbol);
+        double marketPrice = TickerService.getPrice(symbol);
         double ratio = price / marketPrice;
         return (ratio - 1) * 100;
     }

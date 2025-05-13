@@ -53,6 +53,7 @@ public class TradeList {
         // case when there is already a trade with the given price
         for (Trade trade : orderBook) {
             if (Math.abs(trade.getPrice() - price) < EPSILON) {
+                trade.setLevel(getLevel(price, qty, distance, symbol));
                 trade.setQuantity(qty);
                 return true;
             }
