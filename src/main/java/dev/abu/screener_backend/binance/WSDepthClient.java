@@ -52,7 +52,7 @@ public class WSDepthClient {
     public void startWebSocket() {
         WebSocketContainer container = ContainerProvider.getWebSocketContainer();
         // set max buffer size: 5MB
-        container.setDefaultMaxTextMessageBufferSize(5 * 1024 * 1024);
+        container.setDefaultMaxTextMessageBufferSize(10 * 1024 * 1024);
         client = new StandardWebSocketClient(container);
         future = client.execute(new DepthHandler(), this.wsUrl);
         try {

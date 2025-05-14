@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.abu.screener_backend.websockets.WSOpenInterestHandler;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpEntity;
@@ -19,6 +20,7 @@ import java.text.NumberFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static dev.abu.screener_backend.binance.BinanceService.waitFor;
 import static dev.abu.screener_backend.binance.ExchangeInfoClient.getExchangeInfo;
 import static dev.abu.screener_backend.utils.EnvParams.*;
 import static java.lang.Math.abs;
@@ -28,13 +30,15 @@ import static java.lang.Math.abs;
 @Service
 public class TickerService {
 
+    private static final double THRESHOLD = 5;
     private static final Set<String> garbageTickers = Set.of("bttcusdt", "usdcusdt", "fdusdusdt");
     private static final CloseableHttpClient httpClient = HttpClients.createDefault();
     private static final ObjectMapper mapper = new ObjectMapper();
     private static final Map<String, Double> tickerPriceMap = new ConcurrentHashMap<>();
-    private static final LinkedList<String> history = new LinkedList<>();
     private static final Map<String, Double> previousPrices = new ConcurrentHashMap<>();
 
+    @Getter
+    private final LinkedList<String> history = new LinkedList<>();
     private final TickerRepository tickerRepository;
     private final WSOpenInterestHandler oiWebsocket;
 
@@ -178,8 +182,9 @@ public class TickerService {
             if (currentPrice == null) continue;
 
             double deltaPercentage = ((currentPrice - oldPrice) / oldPrice) * 100;
-            if (abs(deltaPercentage) >= 5) {
+            if (abs(deltaPercentage) >= THRESHOLD) {
                 broadcastPriceChange(symbol, currentPrice, deltaPercentage);
+                waitFor(100L);
             }
         }
     }

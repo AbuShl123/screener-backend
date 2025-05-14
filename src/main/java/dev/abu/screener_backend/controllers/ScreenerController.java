@@ -50,4 +50,11 @@ public class ScreenerController {
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(oiService.getHistoricalOI());
     }
+
+    @GetMapping("/ticker-price-change")
+    public ResponseEntity<List<String>> getTickerPriceChange() {
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(tickerService.getHistory());
+    }
 }

@@ -1,7 +1,6 @@
 package dev.abu.screener_backend.analysis;
 
 import dev.abu.screener_backend.binance.Trade;
-import lombok.Getter;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -10,7 +9,6 @@ import java.util.TreeSet;
 import static dev.abu.screener_backend.analysis.DensityAnalyzer.getLevel;
 import static dev.abu.screener_backend.utils.EnvParams.CUP_SIZE;
 
-@Getter
 public class TradeList {
     private static final double EPSILON = 1e-8;
 
@@ -23,6 +21,14 @@ public class TradeList {
 
     TradeList(String symbol) {
         this.symbol = symbol;
+    }
+
+    public TreeSet<Trade> getBids() {
+        return new TreeSet<>(bids); // to avoid concurrent modification exception
+    }
+
+    public TreeSet<Trade> getAsks() {
+        return new TreeSet<>(asks); // to avoid concurrent modification exception
     }
 
     public void clear() {

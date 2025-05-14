@@ -58,10 +58,6 @@ public class OrderBook {
     }
 
     public void process(JsonNode root) {
-        if (lastReSyncTime > 0 && System.currentTimeMillis() - lastReSyncTime >= 2 * 60 * 60 * 1000) {
-            startReSync();
-        }
-
         // if re-sync is needed and there is no task that is queued for concurrent run,
         // then process this event concurrently to get the initial snapshot
         if (isScheduleNeeded()) {
@@ -113,7 +109,7 @@ public class OrderBook {
             lastReSyncTime = System.currentTimeMillis();
             incrementReSyncCount(websocketName, marketSymbol);
         } else if (U > lastUpdateId) {
-            startReSync();
+            startReSync(-1, U);
         }
     }
 
@@ -132,7 +128,7 @@ public class OrderBook {
             lastUpdateId = u;
             analyzeData(root, false);
         } else {
-            startReSync();
+            startReSync(pu, -1);
         }
     }
 
@@ -141,7 +137,23 @@ public class OrderBook {
         decrementReSyncCount(websocketName, marketSymbol);
         analyzer.reset();
         lastReSyncTime = 0;
-        log.info("{} Initiating re-sync for {}", websocketName, marketSymbol);
+        if (isSpot) {
+            log.info("{} Initiating re-sync for {}", websocketName, marketSymbol);
+        } else {
+
+        }
+    }
+
+    private void startReSync(long pu, long U) {
+        isReSync = true;
+        decrementReSyncCount(websocketName, marketSymbol);
+        analyzer.reset();
+        lastReSyncTime = 0;
+        if (isSpot) {
+            log.info("{} Initiating re-sync for {}", websocketName, marketSymbol);
+        } else {
+            log.info("{} Initiating re-sync for {}: lastUpdateId={} pu={} U={}", websocketName, marketSymbol, lastUpdateId, pu, U);
+        }
     }
 
     private void processInitialSnapshot(long U) {
