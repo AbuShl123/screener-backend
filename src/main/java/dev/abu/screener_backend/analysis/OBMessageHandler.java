@@ -29,13 +29,14 @@ public class OBMessageHandler {
      * where each message weights approximately <b>7KB</b>
      */
     private static final int QUEUE_CAPACITY = 30_000;
-    public static final int SCHEDULE_THRESHOLD = 50;
+    public static final int SCHEDULE_THRESHOLD = 100;
     private static long lastCountUpdate = System.currentTimeMillis();
     private static int totalEventCount = 0;
 
     private final ConcurrentLinkedQueue<String> queue = new ConcurrentLinkedQueue<>();
     private final ObjectMapper mapper = new ObjectMapper();
     private final boolean isSpot;
+    private boolean first = true;
 
     public OBMessageHandler(boolean isSpot) {
         this.isSpot = isSpot;
@@ -45,6 +46,10 @@ public class OBMessageHandler {
 
     public synchronized void take(TextMessage message) {
         if (queue.size() > QUEUE_CAPACITY) queue.clear();
+        if (first) {
+            log.info("First message received: {}", message);
+            first = false;
+        }
 
         queue.add(message.getPayload());
 
@@ -66,7 +71,7 @@ public class OBMessageHandler {
         }
 
         long duration = (System.nanoTime() - start) / 1_000_000;
-        if (duration > 1000) log.info("Finished processing {} events in {}ms", count, duration);
+        if (duration > 0) log.info("Finished processing {} events in {}ms", count, duration);
     }
 
     private void handleMessage(String message, Set<String> ineligibleSet) {

@@ -105,10 +105,13 @@ public class TickerService {
     /**
      * Updates the list of all tickers, their prices and checks price change.
      */
-    public void updateTickers() {
+    public void syncTickerPrices() {
         updateTickerPrices();
-        setAllTickers();
         checkPriceChanges();
+    }
+
+    public void updateTickers() {
+        setAllTickers();
     }
 
     /**

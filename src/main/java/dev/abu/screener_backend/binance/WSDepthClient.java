@@ -8,21 +8,19 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
 import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.PongMessage;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
-import static dev.abu.screener_backend.binance.BinanceService.waitFor;
 import static dev.abu.screener_backend.binance.OBManager.*;
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
@@ -51,8 +49,7 @@ public class WSDepthClient {
 
     public void startWebSocket() {
         WebSocketContainer container = ContainerProvider.getWebSocketContainer();
-        // set max buffer size: 5MB
-        container.setDefaultMaxTextMessageBufferSize(10 * 1024 * 1024);
+        container.setDefaultMaxTextMessageBufferSize(1024 * 1024); // 1MB buffer
         client = new StandardWebSocketClient(container);
         future = client.execute(new DepthHandler(), this.wsUrl);
         try {
@@ -65,8 +62,15 @@ public class WSDepthClient {
     public void reconnect() {
         log.info("{} Attempting reconnection", name);
         if (!future.isDone()) future.cancel(true);
+        var symbols = new HashSet<>(connectedSymbols);
         connectedSymbols.clear();
         future = client.execute(new DepthHandler(), this.wsUrl);
+        try {
+            session = future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+        listenToSymbols(symbols);
     }
 
     public boolean isSymbolConnected(String symbol) {
@@ -74,7 +78,7 @@ public class WSDepthClient {
     }
 
     public void listenToSymbols(Set<String> symbols) {
-        var newSymbols = getNewSymbols(symbols);
+        var newSymbols = getUnconnectedSymbols(symbols);
         var deletedSymbols = getDeletedSymbols(symbols);
 
         if (!newSymbols.isEmpty()) {
@@ -92,17 +96,14 @@ public class WSDepthClient {
         // if payload is too long, websocket will disconnect
         // therefore data will be sent in chunks of max 315 symbols
         int chunkSize = 315;
+        List<String> listOfSymbols = new ArrayList<>(symbols);
 
         // preparing OrderBook objects - always before opening connection
         prepareOrderBooks(symbols, isSpot, name);
 
         // subscribing to binance streams
         for (int i = 0; i < symbols.size(); i += chunkSize) {
-            var chunkOfSymbols = symbols.stream()
-                    .skip(i)
-                    .limit(chunkSize)
-                    .toList();
-
+            var chunkOfSymbols = listOfSymbols.subList(i, Math.min(listOfSymbols.size(), i + chunkSize));
             var params = buildDepthParam(chunkOfSymbols);
             subscribe(params, generateId());
         }
@@ -163,6 +164,19 @@ public class WSDepthClient {
         }
     }
 
+    public void sendPongMessage() {
+        if (session != null && session.isOpen()) {
+            try {
+                session.sendMessage(new PongMessage());
+            } catch (IOException e) {
+                log.error("{} failed to send pong message: {}", name, e.getMessage());
+            }
+        } else {
+            log.warn("{} cannot send pong message - no active WebSocket session", name);
+            reconnect();
+        }
+    }
+
     private Set<String> buildDepthParam(Collection<String> symbols) {
         Set<String> params = new HashSet<>();
         String prefix = isSpot ? "@depth" : "@depth@500ms";
@@ -174,16 +188,16 @@ public class WSDepthClient {
         return "" + ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE);
     }
 
-    private Set<String> getNewSymbols(Set<String> allSymbols) {
-        return allSymbols.stream()
-                .filter(symbol -> !connectedSymbols.contains(symbol))
-                .collect(Collectors.toSet());
+    private Set<String> getUnconnectedSymbols(Set<String> allSymbols) {
+        Set<String> unconnectedSymbols = new HashSet<>(allSymbols);
+        unconnectedSymbols.removeAll(connectedSymbols);
+        return unconnectedSymbols;
     }
 
     private Set<String> getDeletedSymbols(Set<String> allSymbols) {
-        return connectedSymbols.stream()
-                .filter(symbol -> !allSymbols.contains(symbol.replace(FUT_SIGN, "")))
-                .collect(Collectors.toSet());
+        Set<String> deletedSymbols = new HashSet<>(connectedSymbols);
+        deletedSymbols.removeAll(allSymbols);
+        return deletedSymbols;
     }
 
     private class DepthHandler extends TextWebSocketHandler {

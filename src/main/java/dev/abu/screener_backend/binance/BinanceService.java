@@ -24,21 +24,38 @@ public class BinanceService {
         this.futDepthClient = new WSDepthClient(STREAM_FUT_URL, false);
         spotDepthClient.startWebSocket();
         futDepthClient.startWebSocket();
+        setup();
     }
 
-    @Scheduled(fixedDelay = 60_000)
-    public void updateTickers() {
+    public void setup() {
+        syncEveryMinute();
+        tickersUpdate();
+    }
+
+    @Scheduled(initialDelay = 60_000, fixedDelay = 60_000)
+    public void syncEveryMinute() {
         printReSyncMap();
-        tickerService.updateTickers();
+        tickerService.syncTickerPrices();
         maxOrdersService.updateMaxOrders();
         maxOrdersService.updateDepthData();
+    }
+
+    @Scheduled(initialDelay = 15 * 60_000, fixedDelay = 15 * 60_000)
+    public void tickersUpdate() {
+        tickerService.updateTickers();
         spotDepthClient.listenToSymbols(tickerService.getSpotSymbols());
         futDepthClient.listenToSymbols(tickerService.getFutSymbols());
     }
 
+    @Scheduled(initialDelay = 60_000, fixedDelay = 180_000)
+    public void sendPongMessage() {
+        spotDepthClient.sendPongMessage();
+        futDepthClient.sendPongMessage();
+    }
+
     public boolean isSymbolConnected(String symbol, boolean isSpot) {
         if (isSpot) return spotDepthClient.isSymbolConnected(symbol);
-        else return futDepthClient.isSymbolConnected(symbol);
+        return futDepthClient.isSymbolConnected(symbol);
     }
 
     public static void waitFor(long millis) {
