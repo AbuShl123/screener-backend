@@ -25,7 +25,6 @@ public class OrderBook {
     private final boolean isSpot;
     private final OrderBookStream analyzer;
     @Getter private long lastUpdateId;
-    private long lastReSyncTime;
     @Getter private boolean isReSync = true;
     private boolean isInitialEvent = false;
     @Getter private boolean isTaskScheduled = false;
@@ -106,7 +105,6 @@ public class OrderBook {
             lastUpdateId = u;
             analyzeData(root, false);
             isInitialEvent = false;
-            lastReSyncTime = System.currentTimeMillis();
             incrementReSyncCount(websocketName, marketSymbol);
         } else if (U > lastUpdateId) {
             startReSync(-1, U);
@@ -136,7 +134,6 @@ public class OrderBook {
         isReSync = true;
         decrementReSyncCount(websocketName, marketSymbol);
         analyzer.reset();
-        lastReSyncTime = 0;
         if (isSpot) {
             log.info("{} Initiating re-sync for {}", websocketName, marketSymbol);
         } else {
@@ -148,7 +145,6 @@ public class OrderBook {
         isReSync = true;
         decrementReSyncCount(websocketName, marketSymbol);
         analyzer.reset();
-        lastReSyncTime = 0;
         if (isSpot) {
             log.info("{} Initiating re-sync for {}", websocketName, marketSymbol);
         } else {

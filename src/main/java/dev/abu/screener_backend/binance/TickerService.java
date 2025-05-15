@@ -77,13 +77,14 @@ public class TickerService {
      * function that updates the ticker->price map.
      */
     private static void updateTickerPrices() {
+        String json = null;
         try {
             // save previous prices
             previousPrices.clear();
             previousPrices.putAll(tickerPriceMap);
 
             // get SPOT prices
-            String json = fetchTickerPrices(true);
+            json = fetchTickerPrices(true);
             List<Map<String, String>> dataList = mapper.readValue(json, new TypeReference<>() {
             });
             for (Map<String, String> entry : dataList) {
@@ -98,7 +99,7 @@ public class TickerService {
                 tickerPriceMap.put(entry.get("symbol").toLowerCase() + FUT_SIGN, Double.parseDouble(entry.get("price")));
             }
         } catch (JsonProcessingException e) {
-            log.error("Error while reading ticker prices", e);
+            log.error("Error while reading ticker prices: {}", json, e);
         }
     }
 
