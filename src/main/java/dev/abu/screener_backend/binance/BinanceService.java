@@ -32,11 +32,15 @@ public class BinanceService {
         tickersUpdate();
     }
 
+    @Scheduled(initialDelay = 1000, fixedDelay = 1000)
+    public void maxOrdersUpdate() {
+        maxOrdersService.updateMaxOrders();
+    }
+
     @Scheduled(initialDelay = 60_000, fixedDelay = 60_000)
     public void syncEveryMinute() {
         printReSyncMap();
         tickerService.syncTickerPrices();
-        maxOrdersService.updateMaxOrders();
         maxOrdersService.updateDepthData();
     }
 

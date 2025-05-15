@@ -39,7 +39,6 @@ public class MaxOrdersService {
 
     private String generateMaxOrders() {
         ArrayNode array = mapper.createArrayNode();
-        String jsonString = "[]";
 
         for (OrderBook orderBook : OBManager.getAllOrderBooks()) {
             Trade maxAsk = orderBook.getMaxTrade(true);
@@ -59,13 +58,7 @@ public class MaxOrdersService {
             array.add(obj);
         }
 
-        try {
-            jsonString = mapper.writeValueAsString(array);
-        } catch (Exception e) {
-            log.error("Failed to update max orders", e);
-        }
-
-        return jsonString;
+       return array.toString();
     }
 
     private String generateDepthData() {
