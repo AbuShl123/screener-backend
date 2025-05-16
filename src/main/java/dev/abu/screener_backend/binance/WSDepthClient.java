@@ -88,6 +88,7 @@ public class WSDepthClient {
         if (session != null && session.isOpen()) {
             try {
                 session.close();
+                session = null;
             } catch (IOException e) {
                 log.warn("{} failed to disconnect {}", name, e.getMessage());
             }
@@ -188,7 +189,7 @@ public class WSDepthClient {
             session.sendMessage(new TextMessage(message));
             return true;
         } catch (Exception e) {
-            log.warn("{} couldn't send message to server {}", name, e.getMessage());
+            log.warn("{} couldn't send message to server - {}", name, e.getMessage());
             return false;
         }
     }
@@ -236,7 +237,6 @@ public class WSDepthClient {
 
         @Override
         public void afterConnectionEstablished(@NonNull WebSocketSession session) {
-            WSDepthClient.this.session = session;
             log.info("{} websocket connection established with uri {}", name, wsUrl);
         }
 

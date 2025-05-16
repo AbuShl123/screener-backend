@@ -12,6 +12,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import static dev.abu.screener_backend.binance.OBManager.getNumOfScheduledTasks;
 import static dev.abu.screener_backend.binance.OBManager.getOrderBook;
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
@@ -27,7 +28,7 @@ public class OBMessageHandler {
      * where each message weights approximately <b>7KB</b>
      */
     private static final int QUEUE_CAPACITY = 30_000;
-    public static final int SCHEDULE_THRESHOLD = 115;
+    private static final int SCHEDULE_THRESHOLD = 115;
     private static long lastCountUpdate = System.currentTimeMillis();
     private static int totalEventCount = 0;
 
@@ -90,7 +91,7 @@ public class OBMessageHandler {
                 queue.remove(message);
             } else if (orderBook.isTaskScheduled()) {
                 ineligibleSet.add(symbol);
-            } else if (orderBook.isScheduleNeeded() && OrderBook.getNumOfScheduledTasks() > SCHEDULE_THRESHOLD) {
+            } else if (orderBook.isScheduleNeeded() && getNumOfScheduledTasks(isSpot) > SCHEDULE_THRESHOLD) {
                 queue.remove(message);
             } else {
                 orderBook.process(root);

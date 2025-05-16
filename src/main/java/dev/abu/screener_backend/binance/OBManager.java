@@ -5,13 +5,18 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
 @Slf4j
 public class OBManager {
 
-    public static final Map<String, OrderBook> orderBooks = new HashMap<>();
+    private static final ThreadPoolExecutor spotExecService = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+    private static final ThreadPoolExecutor futExecService = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+    private static final Map<String, OrderBook> orderBooks = new HashMap<>();
     private static final Map<String, Set<String>> reSyncCountMap = new ConcurrentHashMap<>();
 
     private OBManager() {}
@@ -38,6 +43,16 @@ public class OBManager {
 
     public synchronized static Collection<OrderBook> getAllOrderBooks() {
         return orderBooks.values();
+    }
+
+    public synchronized static long getNumOfScheduledTasks(boolean isSpot) {
+        if (isSpot) return spotExecService.getQueue().size();
+        return futExecService.getQueue().size();
+    }
+
+    public synchronized static void scheduleTask(Runnable task, boolean isSpot) {
+        if (isSpot) spotExecService.submit(task);
+        else futExecService.submit(task);
     }
 
     public synchronized static void printReSyncMap() {

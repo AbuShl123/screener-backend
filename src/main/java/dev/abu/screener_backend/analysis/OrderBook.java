@@ -9,15 +9,12 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.*;
 import java.util.concurrent.*;
 
-import static dev.abu.screener_backend.binance.OBManager.decrementReSyncCount;
-import static dev.abu.screener_backend.binance.OBManager.incrementReSyncCount;
 import static dev.abu.screener_backend.binance.DepthClient.getInitialSnapshot;
+import static dev.abu.screener_backend.binance.OBManager.*;
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
 @Slf4j
 public class OrderBook {
-
-    private static final ThreadPoolExecutor execService = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final String websocketName;
@@ -34,10 +31,6 @@ public class OrderBook {
         this.isSpot = isSpot;
         this.analyzer = OrderBookStream.createInstance(marketSymbol);
         this.websocketName = websocketName;
-    }
-
-    public synchronized static long getNumOfScheduledTasks() {
-        return execService.getQueue().size();
     }
 
     public TreeSet<Trade> getBids() {
@@ -74,10 +67,10 @@ public class OrderBook {
 
     private void processEventConcurrently(JsonNode root) {
         isTaskScheduled = true;
-        execService.submit(() -> {
+        scheduleTask(() -> {
             startProcessing(root);
             isTaskScheduled = false;
-        });
+        }, isSpot);
     }
 
     private void startProcessing(JsonNode root) {
