@@ -107,7 +107,7 @@ public class OrderBook {
             isInitialEvent = false;
             incrementReSyncCount(websocketName, marketSymbol);
         } else if (U > lastUpdateId) {
-            startReSync(-1, U);
+            startReSync();
         }
     }
 
@@ -126,7 +126,7 @@ public class OrderBook {
             lastUpdateId = u;
             analyzeData(root, false);
         } else {
-            startReSync(pu, -1);
+            startReSync();
         }
     }
 
@@ -134,22 +134,6 @@ public class OrderBook {
         isReSync = true;
         decrementReSyncCount(websocketName, marketSymbol);
         analyzer.reset();
-        if (isSpot) {
-            log.info("{} Initiating re-sync for {}", websocketName, marketSymbol);
-        } else {
-
-        }
-    }
-
-    private void startReSync(long pu, long U) {
-        isReSync = true;
-        decrementReSyncCount(websocketName, marketSymbol);
-        analyzer.reset();
-        if (isSpot) {
-            log.info("{} Initiating re-sync for {}", websocketName, marketSymbol);
-        } else {
-            log.info("{} Initiating re-sync for {}: lastUpdateId={} pu={} U={}", websocketName, marketSymbol, lastUpdateId, pu, U);
-        }
     }
 
     private void processInitialSnapshot(long U) {

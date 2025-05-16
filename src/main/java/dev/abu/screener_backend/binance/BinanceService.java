@@ -29,7 +29,6 @@ public class BinanceService {
 
     public void setup() {
         syncEveryMinute();
-        tickersUpdate();
     }
 
     @Scheduled(initialDelay = 1000, fixedDelay = 1000)
@@ -44,7 +43,7 @@ public class BinanceService {
         maxOrdersService.updateDepthData();
     }
 
-    @Scheduled(initialDelay = 15 * 60_000, fixedDelay = 15 * 60_000)
+    @Scheduled(fixedDelay = 15 * 60_000)
     public void tickersUpdate() {
         tickerService.updateTickers();
         spotDepthClient.listenToSymbols(tickerService.getSpotSymbols());

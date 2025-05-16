@@ -5,9 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.socket.TextMessage;
 
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
@@ -29,38 +27,30 @@ public class OBMessageHandler {
      * where each message weights approximately <b>7KB</b>
      */
     private static final int QUEUE_CAPACITY = 30_000;
-    public static final int SCHEDULE_THRESHOLD = 100;
+    public static final int SCHEDULE_THRESHOLD = 115;
     private static long lastCountUpdate = System.currentTimeMillis();
     private static int totalEventCount = 0;
 
-    private final ConcurrentLinkedQueue<String> queue = new ConcurrentLinkedQueue<>();
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ConcurrentLinkedQueue<String> queue;
+    private final ObjectMapper mapper;
     private final boolean isSpot;
-    private boolean first = true;
 
     public OBMessageHandler(boolean isSpot) {
+        this.queue = new ConcurrentLinkedQueue<>();
+        this.mapper = new ObjectMapper();
         this.isSpot = isSpot;
         ScheduledExecutorService execService = Executors.newSingleThreadScheduledExecutor();
-        execService.scheduleAtFixedRate(this::processor, 100L, 50L, TimeUnit.MILLISECONDS);
+        execService.scheduleAtFixedRate(this::processor, 1000L, 1000L, TimeUnit.MILLISECONDS);
     }
 
     public synchronized void take(TextMessage message) {
         if (queue.size() > QUEUE_CAPACITY) queue.clear();
-        if (first) {
-            log.info("First message received: {}", message);
-            first = false;
-        }
-
         queue.add(message.getPayload());
-
-        if (queue.size() % 10000 == 0) {
-            log.info("{} tasks scheduled", OrderBook.getNumOfScheduledTasks());
-            log.info("{} messages are buffered", queue.size());
-        }
     }
 
     private void processor() {
         if (queue.isEmpty()) return;
+
         long start = System.nanoTime();
 
         Set<String> ineligibleSet = new HashSet<>();
@@ -98,17 +88,11 @@ public class OBMessageHandler {
 
             if (orderBook == null) {
                 queue.remove(message);
-            }
-
-            else if (orderBook.isTaskScheduled()) {
+            } else if (orderBook.isTaskScheduled()) {
                 ineligibleSet.add(symbol);
-            }
-
-            else if (orderBook.isScheduleNeeded() && OrderBook.getNumOfScheduledTasks() > SCHEDULE_THRESHOLD) {
+            } else if (orderBook.isScheduleNeeded() && OrderBook.getNumOfScheduledTasks() > SCHEDULE_THRESHOLD) {
                 queue.remove(message);
-            }
-
-            else {
+            } else {
                 orderBook.process(root);
                 queue.remove(message);
                 analyzeEventCount();
@@ -126,63 +110,5 @@ public class OBMessageHandler {
             totalEventCount = 0;
             lastCountUpdate = System.currentTimeMillis();
         }
-    }
-
-    /**
-     * Prints the content of the queue as well as their eligibility status.
-     * Used for debugging, slows down the execution.
-     */
-    private void enumerateQueue() {
-        List<String> enumeratedQueue = new ArrayList<>();
-        for (String message : queue) {
-            try {
-                JsonNode root = mapper.readTree(message);
-                JsonNode data = root.get("data");
-                JsonNode symbolNode = data.get("s");
-                if (symbolNode == null) continue;
-                String symbol = symbolNode.asText().toLowerCase();
-                var marketSymbol = symbol + (isSpot ? "" : FUT_SIGN);
-                enumeratedQueue.add(marketSymbol + "=" + getOrderBook(marketSymbol).isTaskScheduled());
-            } catch (Exception e) {
-                log.warn("Failure while enumeration - {}", message, e);
-            }
-        }
-        System.out.println(enumeratedQueue);
-    }
-
-    /**
-     * Prints the content of the queue, while extracting only the important part of the message.
-     */
-    public void printQueue() {
-        for (String msg : queue) {
-            log.info(msg.substring(msg.indexOf("\"s\""), msg.indexOf("\"b\"")));
-        }
-    }
-
-    /**
-     * Runs garbage collector and prints the memory usage of the JVM.
-     */
-    private void printMemoryUsage() {
-        Runtime runtime = Runtime.getRuntime();
-
-        // Run garbage collector to get a more accurate picture
-        runtime.gc();
-
-        long totalMemory = runtime.totalMemory();     // total memory in JVM
-        long freeMemory = runtime.freeMemory();       // free memory in JVM
-        long usedMemory = totalMemory - freeMemory;   // memory actually used
-
-        System.out.println("Total Memory: " + totalMemory / (1024 * 1024) + " MB");
-        System.out.println("Free Memory: " + freeMemory / (1024 * 1024) + " MB");
-        System.out.println("Used Memory: " + usedMemory / (1024 * 1024) + " MB");
-    }
-
-    /**
-     * Prints the weight (in bytes) of all the messages currently in the queue
-     */
-    private void printQueueWeight() {
-        long weight = 0;
-        for (String msg : queue) weight += msg.getBytes().length;
-        log.info("Current queue weight: {} bytes", weight);
     }
 }
