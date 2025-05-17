@@ -1,5 +1,7 @@
 package dev.abu.screener_backend.binance;
 
+import dev.abu.screener_backend.binance.density.DensityService;
+import dev.abu.screener_backend.binance.ticker.TickerService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -15,15 +17,15 @@ public class BinanceService {
     private final TickerService tickerService;
     private final MaxOrdersService maxOrdersService;
     private final WSDepthClient spotDepthClient;
-    private final WSDepthClient futDepthClient;
+//    private final WSDepthClient futDepthClient;
 
-    public BinanceService(TickerService tickerService, MaxOrdersService maxOrdersService) {
+    public BinanceService(TickerService tickerService, MaxOrdersService maxOrdersService, DensityService densityService) {
         this.tickerService = tickerService;
         this.maxOrdersService = maxOrdersService;
-        this.spotDepthClient = new WSDepthClient(STREAM_SPOT_URL, true);
-        this.futDepthClient = new WSDepthClient(STREAM_FUT_URL, false);
+        this.spotDepthClient = new WSDepthClient(STREAM_SPOT_URL, true, densityService);
+//        this.futDepthClient = new WSDepthClient(STREAM_FUT_URL, false, densityService);
         spotDepthClient.startWebSocket();
-        futDepthClient.startWebSocket();
+//        futDepthClient.startWebSocket();
         setup();
     }
 
@@ -47,18 +49,18 @@ public class BinanceService {
     public void tickersUpdate() {
         tickerService.updateTickers();
         spotDepthClient.listenToSymbols(tickerService.getSpotSymbols());
-        futDepthClient.listenToSymbols(tickerService.getFutSymbols());
+//        futDepthClient.listenToSymbols(tickerService.getFutSymbols());
     }
 
     @Scheduled(initialDelay = 60_000, fixedDelay = 180_000)
     public void sendPongMessage() {
         spotDepthClient.sendPongMessage();
-        futDepthClient.sendPongMessage();
+//        futDepthClient.sendPongMessage();
     }
 
     public boolean isSymbolConnected(String symbol, boolean isSpot) {
-        if (isSpot) return spotDepthClient.isSymbolConnected(symbol);
-        return futDepthClient.isSymbolConnected(symbol);
+        return spotDepthClient.isSymbolConnected(symbol);
+//        return futDepthClient.isSymbolConnected(symbol);
     }
 
     public static void waitFor(long millis) {

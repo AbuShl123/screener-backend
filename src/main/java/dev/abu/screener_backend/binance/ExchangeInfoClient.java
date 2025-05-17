@@ -1,5 +1,8 @@
 package dev.abu.screener_backend.binance;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.HttpGet;
@@ -7,8 +10,10 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 
-import static dev.abu.screener_backend.utils.EnvParams.FUT_URL;
-import static dev.abu.screener_backend.utils.EnvParams.SPOT_URL;
+import java.util.HashSet;
+import java.util.Set;
+
+import static dev.abu.screener_backend.utils.EnvParams.*;
 
 @Slf4j
 public class ExchangeInfoClient {
@@ -17,7 +22,7 @@ public class ExchangeInfoClient {
 
     private ExchangeInfoClient() {}
 
-    public synchronized static String getExchangeInfo(boolean isSpot) {
+    public static String getExchangeInfo(boolean isSpot) {
         String baseUri;
         if (isSpot) {
             baseUri = SPOT_URL;
@@ -40,4 +45,7 @@ public class ExchangeInfoClient {
         log.warn("Exchange info is null");
         return null;
     }
+
+//    public static void main(String[] args) {
+//    }
 }

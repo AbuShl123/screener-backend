@@ -7,10 +7,7 @@ import org.springframework.web.socket.TextMessage;
 
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 import static dev.abu.screener_backend.binance.OBManager.getNumOfScheduledTasks;
 import static dev.abu.screener_backend.binance.OBManager.getOrderBook;
@@ -40,13 +37,19 @@ public class OBMessageHandler {
         this.queue = new ConcurrentLinkedQueue<>();
         this.mapper = new ObjectMapper();
         this.isSpot = isSpot;
-        ScheduledExecutorService execService = Executors.newSingleThreadScheduledExecutor();
+        ScheduledExecutorService execService = Executors.newSingleThreadScheduledExecutor(
+                r -> {
+                    Thread t = new Thread(r);
+                    t.setName("spot-processor");
+                    return t;
+                });
         execService.scheduleAtFixedRate(this::processor, 1000L, 1000L, TimeUnit.MILLISECONDS);
     }
 
     public synchronized void take(TextMessage message) {
         if (queue.size() > QUEUE_CAPACITY) queue.clear();
         queue.add(message.getPayload());
+        if (queue.size() % 10_000 == 0) log.info("{} has {} events in queue", isSpot, queue.size());
     }
 
     private void processor() {
@@ -57,7 +60,7 @@ public class OBMessageHandler {
         Set<String> ineligibleSet = new HashSet<>();
         int count = 0;
         for (String message : queue) {
-            handleMessage(message, ineligibleSet);
+            processMessage(message, ineligibleSet);
             count++;
         }
 
@@ -65,7 +68,7 @@ public class OBMessageHandler {
         if (duration > 1000) log.info("Finished processing {} events in {}ms", count, duration);
     }
 
-    private void handleMessage(String message, Set<String> ineligibleSet) {
+    private void processMessage(String message, Set<String> ineligibleSet) {
         try {
 
             JsonNode root = mapper.readTree(message);
@@ -89,10 +92,13 @@ public class OBMessageHandler {
 
             if (orderBook == null) {
                 queue.remove(message);
+
             } else if (orderBook.isTaskScheduled()) {
                 ineligibleSet.add(symbol);
+
             } else if (orderBook.isScheduleNeeded() && getNumOfScheduledTasks(isSpot) > SCHEDULE_THRESHOLD) {
                 queue.remove(message);
+
             } else {
                 orderBook.process(root);
                 queue.remove(message);

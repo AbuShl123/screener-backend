@@ -3,6 +3,7 @@ package dev.abu.screener_backend.analysis;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.abu.screener_backend.binance.Trade;
+import dev.abu.screener_backend.binance.density.DensityService;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -25,12 +26,14 @@ public class OrderBook {
     @Getter private boolean isReSync = true;
     private boolean isInitialEvent = false;
     @Getter private boolean isTaskScheduled = false;
+    private final DensityService densityService;
 
-    public OrderBook(String marketSymbol, boolean isSpot, String websocketName) {
+    public OrderBook(String marketSymbol, boolean isSpot, String websocketName, DensityService densityService) {
         this.marketSymbol = marketSymbol;
         this.isSpot = isSpot;
         this.analyzer = OrderBookStream.createInstance(marketSymbol);
         this.websocketName = websocketName;
+        this.densityService = densityService;
     }
 
     public TreeSet<Trade> getBids() {
@@ -155,6 +158,7 @@ public class OrderBook {
     private void analyzeData(JsonNode root, boolean isSnapshot) {
         JsonNode asks = isSnapshot ? root.get("asks") : root.get("a");
         JsonNode bids = isSnapshot ? root.get("bids") : root.get("b");
-        analyzer.analyze(root, asks, bids);
+//        analyzer.analyze(root, asks, bids);
+        densityService.saveDensities(marketSymbol, root, asks, bids);
     }
 }

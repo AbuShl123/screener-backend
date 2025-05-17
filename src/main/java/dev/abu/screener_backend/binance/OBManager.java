@@ -1,21 +1,33 @@
 package dev.abu.screener_backend.binance;
 
 import dev.abu.screener_backend.analysis.OrderBook;
+import dev.abu.screener_backend.binance.density.DensityService;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
 @Slf4j
 public class OBManager {
 
-    private static final ThreadPoolExecutor spotExecService = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
-    private static final ThreadPoolExecutor futExecService = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+    private static final ThreadPoolExecutor spotExecService =
+            new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
+                    r -> {
+                        Thread t = new Thread(r);
+                        t.setName("spot-scheduler");
+                        return t;
+                    });
+
+    private static final ThreadPoolExecutor futExecService =
+            new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
+                    r -> {
+                        Thread t = new Thread(r);
+                        t.setName("fut-scheduler");
+                        return t;
+                    });
+
     private static final Map<String, OrderBook> orderBooks = new HashMap<>();
     private static final Map<String, Set<String>> reSyncCountMap = new ConcurrentHashMap<>();
 
@@ -65,10 +77,15 @@ public class OBManager {
         log.info(sb.toString());
     }
 
-    public synchronized static void prepareOrderBooks(Collection<String> symbols, boolean isSpot, String websocketName) {
+    public synchronized static void prepareOrderBooks(
+            Collection<String> symbols,
+            boolean isSpot,
+            String websocketName,
+            DensityService densityService
+    ) {
         for (String symbol : symbols) {
             String marketSymbol = isSpot ? symbol : symbol + FUT_SIGN;
-            orderBooks.putIfAbsent(marketSymbol, new OrderBook(marketSymbol, isSpot, websocketName));
+            orderBooks.putIfAbsent(marketSymbol, new OrderBook(marketSymbol, isSpot, websocketName, densityService));
         }
     }
 

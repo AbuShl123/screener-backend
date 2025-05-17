@@ -2,13 +2,12 @@ package dev.abu.screener_backend.controllers;
 
 import dev.abu.screener_backend.annotations.SubscribedOnly;
 import dev.abu.screener_backend.binance.MaxOrdersService;
-import dev.abu.screener_backend.binance.TickerService;
+import dev.abu.screener_backend.binance.ticker.TickerService;
 import dev.abu.screener_backend.binance.BitgetOpenInterestService;
-import dev.abu.screener_backend.binance.Ticker;
+import dev.abu.screener_backend.binance.ticker.Ticker;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -52,9 +51,9 @@ public class ScreenerController {
     }
 
     @GetMapping("/ticker-price-change")
-    public ResponseEntity<List<String>> getTickerPriceChange() {
+    public ResponseEntity<String> getTickerPriceChange() {
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(tickerService.getHistory());
+                .body(tickerService.getHistory().toString());
     }
 }

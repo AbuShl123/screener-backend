@@ -1,7 +1,7 @@
 package dev.abu.screener_backend.analysis;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import dev.abu.screener_backend.binance.TickerService;
+import dev.abu.screener_backend.binance.ticker.TickerService;
 import dev.abu.screener_backend.binance.Trade;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;

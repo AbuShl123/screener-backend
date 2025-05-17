@@ -1,10 +1,11 @@
-package dev.abu.screener_backend.binance;
+package dev.abu.screener_backend.binance.ticker;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import dev.abu.screener_backend.binance.density.PartitionManagerService;
 import dev.abu.screener_backend.websockets.WSOpenInterestHandler;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +17,6 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.springframework.stereotype.Service;
 
-import java.text.NumberFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -41,6 +41,7 @@ public class TickerService {
     private final LinkedList<String> history = new LinkedList<>();
     private final TickerRepository tickerRepository;
     private final WSOpenInterestHandler oiWebsocket;
+    private final PartitionManagerService partitionManagerService;
 
     /**
      * @param mSymbol market symbol
@@ -187,7 +188,7 @@ public class TickerService {
 
             double deltaPercentage = ((currentPrice - oldPrice) / oldPrice) * 100;
             if (abs(deltaPercentage) >= THRESHOLD) {
-                broadcastPriceChange(symbol, currentPrice, deltaPercentage);
+                broadcastPriceChange(symbol, currentPrice, oldPrice, deltaPercentage);
                 waitFor(100L);
             }
         }
@@ -195,15 +196,17 @@ public class TickerService {
 
     /**
      * Creates json string and broadcasts data into websocket.
-     * @param symbol symbol to send updates for
-     * @param currentPrice current price of the symbol
+     *
+     * @param symbol          symbol to send updates for
+     * @param currentPrice    current price of the symbol
      * @param deltaPercentage price change in %
      */
-    private void broadcastPriceChange(String symbol, double currentPrice, double deltaPercentage) {
+    private void broadcastPriceChange(String symbol, double currentPrice, double pastPrice, double deltaPercentage) {
         ObjectNode obj = mapper.createObjectNode();
         obj.put("n", "price");
         obj.put("s", symbol);
         obj.put("p", currentPrice);
+        obj.put("o", pastPrice);
         obj.put("d", Math.round(deltaPercentage * 100.0) / 100.0);
         String json = obj.toString();
         appendNewEventToHistory(json);
@@ -266,7 +269,14 @@ public class TickerService {
         for (String symbol : futSymbols) {
             double price = getPrice(symbol);
             boolean hasSpot = spotSymbols.contains(symbol);
-            if (!hasSpot) price = getPrice(symbol + FUT_SIGN);
+            partitionManagerService.ensurePartitionExists(symbol + "_f");
+
+            if (!hasSpot) {
+                price = getPrice(symbol + FUT_SIGN);
+            } else {
+                partitionManagerService.ensurePartitionExists(symbol);
+            }
+
             saveTicker(symbol, price, hasSpot, true);
         }
 

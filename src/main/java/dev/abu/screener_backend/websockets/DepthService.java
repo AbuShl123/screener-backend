@@ -1,7 +1,7 @@
 package dev.abu.screener_backend.websockets;
 
 import dev.abu.screener_backend.analysis.OrderBook;
-import dev.abu.screener_backend.binance.TickerService;
+import dev.abu.screener_backend.binance.ticker.TickerService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.socket.TextMessage;

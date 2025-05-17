@@ -2,6 +2,7 @@ package dev.abu.screener_backend.binance;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.abu.screener_backend.analysis.OBMessageHandler;
+import dev.abu.screener_backend.binance.density.DensityService;
 import jakarta.websocket.ContainerProvider;
 import jakarta.websocket.WebSocketContainer;
 import lombok.Getter;
@@ -35,11 +36,13 @@ public class WSDepthClient {
     private final Set<String> connectedSymbols;
     private final StandardWebSocketClient client;
     private WebSocketSession session;
+    private final DensityService densityService;
 
-    public WSDepthClient(String url, boolean isSpot) {
+    public WSDepthClient(String url, boolean isSpot, DensityService densityService) {
         this.name = isSpot ? "Spot" : "Futures";
         this.wsUrl = url;
         this.isSpot = isSpot;
+        this.densityService = densityService;
         this.messageHandler = new OBMessageHandler(isSpot);
         this.connectedSymbols = ConcurrentHashMap.newKeySet();
         prepareReSyncMap(name);
@@ -69,7 +72,7 @@ public class WSDepthClient {
         while (attempts < 5 && (session == null || !session.isOpen())) {
             try {
                 var future = client.execute(new DepthHandler(), this.wsUrl);
-                session = future.get(10, TimeUnit.SECONDS);
+                session = future.get(30, TimeUnit.SECONDS);
             } catch (Exception e) {
                 log.error("{} Reconnection attempt {} failed: {}", name, attempts, e.getMessage());
                 attempts++;
@@ -121,7 +124,7 @@ public class WSDepthClient {
         List<String> listOfSymbols = new ArrayList<>(symbols);
 
         // preparing OrderBook objects - always before opening connection
-        prepareOrderBooks(symbols, isSpot, name);
+        prepareOrderBooks(symbols, isSpot, name, densityService);
 
         // subscribing to binance streams
         for (int i = 0; i < symbols.size(); i += chunkSize) {
