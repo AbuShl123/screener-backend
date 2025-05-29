@@ -1,69 +1,75 @@
 package dev.abu.screener_backend.websockets;
 
-import dev.abu.screener_backend.binance.BinanceService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import dev.abu.screener_backend.analysis.TradeListDTO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
-import java.util.HashMap;
-import java.util.HashSet;
+import java.io.IOException;
 import java.util.Map;
-import java.util.Set;
-
-import static dev.abu.screener_backend.binance.BinanceService.waitFor;
-import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
-import static dev.abu.screener_backend.utils.RequestUtilities.getQueryParams;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArraySet;
 
 @Component
 @Slf4j
 @RequiredArgsConstructor
 public class SessionPool {
 
-    private final DepthService depthService;
-    private final BinanceService binanceService;
-    private final Set<WebSocketSession> sessions = new HashSet<>();
-    private final Map<String, Set<WebSocketSession>> symbolsMap = new HashMap<>();
-    private final Set<String> symbolsFlat = new HashSet<>();
+    private final ObjectMapper mapper = new ObjectMapper();
+    private final Map<String, TradeListDTO> eventsMap = new ConcurrentHashMap<>();
+    private final CopyOnWriteArraySet<WebSocketSession> sessions = new CopyOnWriteArraySet<>();
 
     public void addSession(WebSocketSession session) {
-        extractInputData(session);
         sessions.add(session);
     }
 
     public void removeClosedSessions() {
         sessions.removeIf(session -> !session.isOpen());
-        symbolsFlat.removeIf(symbol -> symbolsMap.get(symbol).isEmpty());
     }
 
-    public void sendData() {
-        if (sessions.isEmpty()) return;
+    public synchronized void addData(TradeListDTO tradeList) {
+        eventsMap.put(tradeList.s(), tradeList);
+    }
 
-        // to avoid concurrent modification exception
-        Set<String> symbols = new HashSet<>(this.symbolsFlat);
+    public synchronized void removeData(String symbol) {
+        eventsMap.remove(symbol);
+    }
 
-        for (String symbol : symbols) {
-            depthService.prepareData(symbol);
-            symbolsMap.get(symbol).forEach(depthService::broadCastData);
-            waitFor(50);
+    public synchronized void sendData() {
+        var events = eventsMap.values();
+        if (sessions.isEmpty() || events.isEmpty()) return;
+        ArrayNode array = mapper.createArrayNode();
+        for (TradeListDTO tradeList : events) {
+            JsonNode node = mapper.valueToTree(tradeList);
+            array.add(node);
+        }
+        serializeAndSend(array);
+    }
+
+    private void serializeAndSend(ArrayNode data) {
+        try {
+            String json = mapper.writeValueAsString(data);
+            broadCastMessage(json);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize trade list DTO: {}", e.getMessage());
         }
     }
 
-    private void extractInputData(WebSocketSession session) {
-        var queryParamsMap = getQueryParams(session);
-        String symbolsStr = queryParamsMap.get("symbols");
-        if (symbolsStr == null || symbolsStr.isEmpty()) return;
-        String[] rawSymbols = symbolsStr.split("/");
-
-        for (String rawSymbol : rawSymbols) {
-            String mSymbol = rawSymbol.trim().toLowerCase();
-            String symbol = mSymbol.replace(FUT_SIGN, "");
-            boolean isSpot = !mSymbol.endsWith(FUT_SIGN);
-            if (!binanceService.isSymbolConnected(symbol, isSpot)) continue;
-
-            if (!symbolsMap.containsKey(mSymbol)) symbolsMap.put(mSymbol, new HashSet<>());
-            symbolsMap.get(mSymbol).add(session);
-            this.symbolsFlat.add(mSymbol);
-        }
+    private void broadCastMessage(String message) {
+        sessions.forEach(session -> {
+           try {
+               if (session.isOpen()) {
+                   session.sendMessage(new TextMessage(message));
+               }
+           } catch (IOException e) {
+               log.error("Couldn't send message: {}", e.getMessage());
+           }
+        });
     }
 }

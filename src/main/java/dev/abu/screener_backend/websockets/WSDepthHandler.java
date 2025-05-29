@@ -24,7 +24,7 @@ public class WSDepthHandler extends TextWebSocketHandler {
     @Override
     public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {}
 
-    @Scheduled(fixedDelay = 500)
+    @Scheduled(fixedDelay = 500L)
     public void sendUpdates() {
         sessionPool.removeClosedSessions();
         sessionPool.sendData();

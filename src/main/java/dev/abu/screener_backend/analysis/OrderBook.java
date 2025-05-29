@@ -2,47 +2,46 @@ package dev.abu.screener_backend.analysis;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.abu.screener_backend.binance.Trade;
+import dev.abu.screener_backend.binance.TickerService;
+import dev.abu.screener_backend.websockets.SessionPool;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-
-import java.util.*;
-import java.util.concurrent.*;
 
 import static dev.abu.screener_backend.binance.DepthClient.getInitialSnapshot;
 import static dev.abu.screener_backend.binance.OBManager.*;
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
+import static dev.abu.screener_backend.utils.EnvParams.MAX_INCLINE;
+import static java.lang.Math.abs;
+import static java.lang.Math.round;
 
 @Slf4j
 public class OrderBook {
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final String websocketName;
-    @Getter private final String marketSymbol;
     private final boolean isSpot;
-    private final OrderBookStream analyzer;
-    @Getter private long lastUpdateId;
-    @Getter private boolean isReSync = true;
     private boolean isInitialEvent = false;
-    @Getter private boolean isTaskScheduled = false;
 
-    public OrderBook(String marketSymbol, boolean isSpot, String websocketName) {
+    @Getter
+    private final TradeList tradeList;
+    @Getter
+    private final String marketSymbol;
+    @Getter
+    private long lastUpdateId;
+    @Getter
+    private boolean isTaskScheduled = false;
+    @Getter
+    private boolean isReSync = true;
+
+    public OrderBook(String marketSymbol, boolean isSpot, String websocketName, SessionPool sessionPool) {
         this.marketSymbol = marketSymbol;
+        this.tradeList = new TradeList(marketSymbol, sessionPool);
         this.isSpot = isSpot;
-        this.analyzer = OrderBookStream.createInstance(marketSymbol);
         this.websocketName = websocketName;
     }
 
-    public TreeSet<Trade> getBids() {
-        return analyzer.getBids();
-    }
-
-    public TreeSet<Trade> getAsks() {
-        return analyzer.getAsks();
-    }
-
-    public Trade getMaxTrade(boolean isAsk){
-        return analyzer.getMaxTrade(isAsk);
+    public Trade getMaxTrade(boolean isAsk) {
+        return tradeList.getMaxTrade(isAsk);
     }
 
     public boolean isScheduleNeeded() {
@@ -126,7 +125,7 @@ public class OrderBook {
     private void startReSync() {
         isReSync = true;
         decrementReSyncCount(websocketName, marketSymbol);
-        analyzer.reset();
+        tradeList.clear();
     }
 
     private void processInitialSnapshot(long U) {
@@ -155,6 +154,39 @@ public class OrderBook {
     private void analyzeData(JsonNode root, boolean isSnapshot) {
         JsonNode asks = isSnapshot ? root.get("asks") : root.get("a");
         JsonNode bids = isSnapshot ? root.get("bids") : root.get("b");
-        analyzer.analyze(root, asks, bids);
+        analyze(root, asks, bids);
+    }
+
+    private void analyze(JsonNode root, JsonNode asksArray, JsonNode bidsArray) {
+        long timestamp = getTimeStamp(root);
+        traverseArray(asksArray, timestamp, true);
+        traverseArray(bidsArray, timestamp, false);
+    }
+
+    private long getTimeStamp(JsonNode root) {
+        JsonNode eField = root.get("E");
+        if (eField == null) return System.currentTimeMillis();
+        long timestamp = eField.asLong();
+        return timestamp == 0 ? System.currentTimeMillis() : timestamp;
+    }
+
+    private void traverseArray(JsonNode array, long timestamp, boolean isAsk) {
+        if (array == null || (array.isArray() && array.isEmpty())) {
+            return;
+        }
+        for (JsonNode node : array) {
+            var price = node.get(0).asDouble();
+            var qty = node.get(1).asDouble();
+            double distance = getDistance(price);
+            if (distance <= MAX_INCLINE) {
+                tradeList.addTrade(price, qty, distance, isAsk, timestamp);
+            }
+        }
+    }
+
+    private double getDistance(double price) {
+        double marketPrice = TickerService.getPrice(marketSymbol);
+        double distance = abs((price - marketPrice) / marketPrice * 100);
+        return round(distance * 100.0) / 100.0;
     }
 }

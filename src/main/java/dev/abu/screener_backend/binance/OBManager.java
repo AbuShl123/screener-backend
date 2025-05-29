@@ -1,6 +1,7 @@
 package dev.abu.screener_backend.binance;
 
 import dev.abu.screener_backend.analysis.OrderBook;
+import dev.abu.screener_backend.websockets.SessionPool;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
@@ -20,10 +21,6 @@ public class OBManager {
     private static final Map<String, Set<String>> reSyncCountMap = new ConcurrentHashMap<>();
 
     private OBManager() {}
-
-    public synchronized static int reSyncCount(String websocketName) {
-        return reSyncCountMap.get(websocketName).size();
-    }
 
     public synchronized static void incrementReSyncCount(String websocketName, String symbol) {
         reSyncCountMap.get(websocketName).add(symbol);
@@ -65,10 +62,16 @@ public class OBManager {
         log.info(sb.toString());
     }
 
-    public synchronized static void prepareOrderBooks(Collection<String> symbols, boolean isSpot, String websocketName) {
+    public synchronized static void prepareOrderBooks(Collection<String> symbols, boolean isSpot, String websocketName, SessionPool sessionPool) {
         for (String symbol : symbols) {
             String marketSymbol = isSpot ? symbol : symbol + FUT_SIGN;
-            orderBooks.putIfAbsent(marketSymbol, new OrderBook(marketSymbol, isSpot, websocketName));
+            orderBooks.putIfAbsent(marketSymbol, new OrderBook(marketSymbol, isSpot, websocketName, sessionPool));
+        }
+    }
+
+    public synchronized static void updateDistancesAndLevels() {
+        for (OrderBook orderBook : orderBooks.values()) {
+            orderBook.getTradeList().updateLevelsAndDistances(TickerService.getPrice(orderBook.getMarketSymbol()));
         }
     }
 
