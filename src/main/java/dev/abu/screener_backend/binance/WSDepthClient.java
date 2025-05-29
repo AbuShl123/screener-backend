@@ -2,6 +2,7 @@ package dev.abu.screener_backend.binance;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.abu.screener_backend.analysis.OBMessageHandler;
+import dev.abu.screener_backend.websockets.SessionPool;
 import jakarta.websocket.ContainerProvider;
 import jakarta.websocket.WebSocketContainer;
 import lombok.Getter;
@@ -34,14 +35,16 @@ public class WSDepthClient {
     private final OBMessageHandler messageHandler;
     private final Set<String> connectedSymbols;
     private final StandardWebSocketClient client;
+    private final SessionPool sessionPool;
     private WebSocketSession session;
 
-    public WSDepthClient(String url, boolean isSpot) {
+    public WSDepthClient(String url, boolean isSpot, SessionPool sessionPool) {
         this.name = isSpot ? "Spot" : "Futures";
         this.wsUrl = url;
         this.isSpot = isSpot;
         this.messageHandler = new OBMessageHandler(isSpot);
         this.connectedSymbols = ConcurrentHashMap.newKeySet();
+        this.sessionPool = sessionPool;
         prepareReSyncMap(name);
         WebSocketContainer container = ContainerProvider.getWebSocketContainer();
         container.setDefaultMaxTextMessageBufferSize(1024 * 1024); // 1MB buffer
@@ -121,7 +124,7 @@ public class WSDepthClient {
         List<String> listOfSymbols = new ArrayList<>(symbols);
 
         // preparing OrderBook objects - always before opening connection
-        prepareOrderBooks(symbols, isSpot, name);
+        prepareOrderBooks(symbols, isSpot, name, sessionPool);
 
         // subscribing to binance streams
         for (int i = 0; i < symbols.size(); i += chunkSize) {

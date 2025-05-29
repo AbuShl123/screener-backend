@@ -1,8 +1,11 @@
 package dev.abu.screener_backend.binance;
 
+import dev.abu.screener_backend.websockets.SessionPool;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+
+import java.util.Set;
 
 import static dev.abu.screener_backend.binance.OBManager.printReSyncMap;
 import static dev.abu.screener_backend.utils.EnvParams.STREAM_FUT_URL;
@@ -13,15 +16,13 @@ import static dev.abu.screener_backend.utils.EnvParams.STREAM_SPOT_URL;
 public class BinanceService {
 
     private final TickerService tickerService;
-    private final MaxOrdersService maxOrdersService;
     private final WSDepthClient spotDepthClient;
     private final WSDepthClient futDepthClient;
 
-    public BinanceService(TickerService tickerService, MaxOrdersService maxOrdersService) {
+    public BinanceService(TickerService tickerService, SessionPool sessionPool) {
         this.tickerService = tickerService;
-        this.maxOrdersService = maxOrdersService;
-        this.spotDepthClient = new WSDepthClient(STREAM_SPOT_URL, true);
-        this.futDepthClient = new WSDepthClient(STREAM_FUT_URL, false);
+        this.spotDepthClient = new WSDepthClient(STREAM_SPOT_URL, true, sessionPool);
+        this.futDepthClient = new WSDepthClient(STREAM_FUT_URL, false, sessionPool);
         spotDepthClient.startWebSocket();
         futDepthClient.startWebSocket();
         setup();
@@ -31,16 +32,11 @@ public class BinanceService {
         syncEveryMinute();
     }
 
-    @Scheduled(initialDelay = 1000, fixedDelay = 1000)
-    public void maxOrdersUpdate() {
-        maxOrdersService.updateMaxOrders();
-    }
-
     @Scheduled(initialDelay = 60_000, fixedDelay = 60_000)
     public void syncEveryMinute() {
         printReSyncMap();
         tickerService.syncTickerPrices();
-        maxOrdersService.updateDepthData();
+        OBManager.updateDistancesAndLevels();
     }
 
     @Scheduled(fixedDelay = 15 * 60_000)
@@ -54,11 +50,6 @@ public class BinanceService {
     public void sendPongMessage() {
         spotDepthClient.sendPongMessage();
         futDepthClient.sendPongMessage();
-    }
-
-    public boolean isSymbolConnected(String symbol, boolean isSpot) {
-        if (isSpot) return spotDepthClient.isSymbolConnected(symbol);
-        return futDepthClient.isSymbolConnected(symbol);
     }
 
     public static void waitFor(long millis) {

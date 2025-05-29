@@ -20,7 +20,7 @@ public class DepthClient {
 
     private DepthClient() {}
 
-    private static final int SPOT_API_RATE_LIMIT = 5900;
+    private static final int SPOT_API_RATE_LIMIT = 5700;
     private static final int FUT_API_RATE_LIMIT = 2300;
 
     private static final CloseableHttpClient httpClient;
@@ -54,7 +54,8 @@ public class DepthClient {
         try {
             checkRateLimits(isSpot);
             String baseUri = isSpot ? SPOT_URL : FUT_URL;
-            HttpGet depthRequest = new HttpGet(baseUri + "/depth?symbol=" + symbol.toUpperCase() + "&limit=1000");
+            int limit = isSpot ? 10_000 : 1000;
+            HttpGet depthRequest = new HttpGet(baseUri + "/depth?symbol=" + symbol.toUpperCase() + "&limit=" + limit);
             depthRequest.addHeader("Accept", "application/json");
 
             try (var response = httpClient.execute(depthRequest)) {
