@@ -98,10 +98,6 @@ public class WSDepthClient {
         }
     }
 
-    public boolean isSymbolConnected(String symbol) {
-        return connectedSymbols.contains(symbol);
-    }
-
     public void listenToSymbols(Set<String> symbols) {
         var newSymbols = getUnconnectedSymbols(symbols);
         var deletedSymbols = getDeletedSymbols(symbols);

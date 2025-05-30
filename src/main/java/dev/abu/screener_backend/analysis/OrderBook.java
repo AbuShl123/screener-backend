@@ -146,7 +146,7 @@ public class OrderBook {
             isInitialEvent = true;
 
         } catch (Exception e) {
-            log.error("{} Error processing snapshot: {}", websocketName, raw, e);
+            log.error("{} Error processing snapshot: {} - {}", websocketName, raw, e.getMessage());
             isReSync = true;
         }
     }

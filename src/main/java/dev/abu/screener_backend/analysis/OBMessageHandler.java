@@ -62,7 +62,7 @@ public class OBMessageHandler {
         }
 
         long duration = (System.nanoTime() - start) / 1_000_000;
-        if (duration > 1000) log.info("Finished processing {} events in {}ms", count, duration);
+        if (duration > 2000) log.info("Finished processing {} events in {}ms", count, duration);
     }
 
     private void handleMessage(String message, Set<String> ineligibleSet) {
