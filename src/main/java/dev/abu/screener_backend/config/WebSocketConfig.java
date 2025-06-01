@@ -17,8 +17,8 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        registry.addHandler(depthHandler, "/binance/depth").setAllowedOrigins("*")
-                .addHandler(openInterestHandler, "/bitget/openInterest").setAllowedOrigins("*")
+        registry.addHandler(depthHandler, "/ws/binance/depth").setAllowedOrigins("*")
+                .addHandler(openInterestHandler, "/ws/bitget/openInterest").setAllowedOrigins("*")
                 .addInterceptors(handshakeInterceptor);
     }
 }
