@@ -16,11 +16,9 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.springframework.stereotype.Service;
 
-import java.text.NumberFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static dev.abu.screener_backend.binance.BinanceService.waitFor;
 import static dev.abu.screener_backend.binance.ExchangeInfoClient.getExchangeInfo;
 import static dev.abu.screener_backend.utils.EnvParams.*;
 import static java.lang.Math.abs;
@@ -38,7 +36,7 @@ public class TickerService {
     private static final Map<String, Double> previousPrices = new ConcurrentHashMap<>();
 
     @Getter
-    private final LinkedList<String> history = new LinkedList<>();
+    private final LinkedList<ObjectNode> history = new LinkedList<>();
     private final TickerRepository tickerRepository;
     private final WSOpenInterestHandler oiWebsocket;
 
@@ -195,8 +193,9 @@ public class TickerService {
 
     /**
      * Creates json string and broadcasts data into websocket.
-     * @param symbol symbol to send updates for
-     * @param currentPrice current price of the symbol
+     *
+     * @param symbol          symbol to send updates for
+     * @param currentPrice    current price of the symbol
      * @param deltaPercentage price change in %
      */
     private void broadcastPriceChange(String symbol, double currentPrice, double deltaPercentage) {
@@ -206,15 +205,15 @@ public class TickerService {
         obj.put("p", currentPrice);
         obj.put("d", Math.round(deltaPercentage * 100.0) / 100.0);
         String json = obj.toString();
-        appendNewEventToHistory(json);
+        appendNewEventToHistory(obj);
         oiWebsocket.broadCastData(json);
     }
 
     /**
-     * @param event json string to save into memory.
+     * @param obj json object node to save into memory.
      */
-    private void appendNewEventToHistory(String event) {
-        history.addLast(event);
+    private void appendNewEventToHistory(ObjectNode obj) {
+        history.addLast(obj);
         if (history.size() > 15) {
             history.removeFirst();
         }
@@ -271,5 +270,14 @@ public class TickerService {
         }
 
         log.info("Saved all {} tickers", count());
+    }
+
+    private void waitFor(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.error("Error while waiting: ", e);
+        }
     }
 }

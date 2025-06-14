@@ -1,19 +1,14 @@
-package dev.abu.screener_backend.binance;
+package dev.abu.screener_backend.binance.depth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.abu.screener_backend.analysis.OBMessageHandler;
-import dev.abu.screener_backend.websockets.SessionPool;
+import dev.abu.screener_backend.binance.OBService;
 import jakarta.websocket.ContainerProvider;
 import jakarta.websocket.WebSocketContainer;
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.lang.NonNull;
-import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.PongMessage;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
-import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.io.IOException;
 import java.util.*;
@@ -22,43 +17,33 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
-import static dev.abu.screener_backend.binance.OBManager.*;
-
-@Getter
 @Slf4j
-public class WSDepthClient {
+public abstract class WSDepthClient {
 
-    @Getter
-    private final String name;
-    private final String wsUrl;
-    private final boolean isSpot;
-    private final OBMessageHandler messageHandler;
-    private final Set<String> connectedSymbols;
-    private final StandardWebSocketClient client;
-    private final SessionPool sessionPool;
-    private WebSocketSession session;
+    protected final StandardWebSocketClient client;
+    protected final String baseUrl;
+    protected final String name;
+    protected final boolean isSpot;
+    private final OBService obService;
+    protected WebSocketSession session;
+    protected WSDepthHandler wsDepthHandler;
+    protected final Set<String> connectedSymbols;
 
-    public WSDepthClient(String url, boolean isSpot, SessionPool sessionPool) {
-        this.name = isSpot ? "Spot" : "Futures";
-        this.wsUrl = url;
-        this.isSpot = isSpot;
-        this.messageHandler = new OBMessageHandler(isSpot);
-        this.connectedSymbols = ConcurrentHashMap.newKeySet();
-        this.sessionPool = sessionPool;
-        prepareReSyncMap(name);
+    public WSDepthClient(
+            String baseUrl,
+            String name,
+            boolean isSpot,
+            OBService obService
+    ) {
         WebSocketContainer container = ContainerProvider.getWebSocketContainer();
         container.setDefaultMaxTextMessageBufferSize(1024 * 1024); // 1MB buffer
-        client = new StandardWebSocketClient(container);
-    }
-
-    public void startWebSocket() {
-        var future = client.execute(new DepthHandler(), this.wsUrl);
-        try {
-            session = future.get();
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("{} couldn't connect to websocket {}", name, e.getMessage());
-            reconnect();
-        }
+        this.client = new StandardWebSocketClient(container);
+        this.isSpot = isSpot;
+        this.obService = obService;
+        this.connectedSymbols = ConcurrentHashMap.newKeySet();
+        this.baseUrl = baseUrl;
+        this.name = name;
+        OBService.prepareReSyncMap(name);
     }
 
     public void reconnect() {
@@ -71,8 +56,8 @@ public class WSDepthClient {
         int attempts = 0;
         while (attempts < 5 && (session == null || !session.isOpen())) {
             try {
-                var future = client.execute(new DepthHandler(), this.wsUrl);
-                session = future.get(10, TimeUnit.SECONDS);
+                var future = client.execute(wsDepthHandler, baseUrl);
+                session = future.get(30, TimeUnit.SECONDS);
             } catch (Exception e) {
                 log.error("{} Reconnection attempt {} failed: {}", name, attempts, e.getMessage());
                 attempts++;
@@ -85,6 +70,16 @@ public class WSDepthClient {
         }
 
         listenToSymbols(symbols);
+    }
+
+    public void startWebSocket() {
+        var future = client.execute(wsDepthHandler, baseUrl);
+        try {
+            session = future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("{} couldn't connect to websocket {}", name, e.getMessage());
+            reconnect();
+        }
     }
 
     public void disconnect() {
@@ -120,12 +115,12 @@ public class WSDepthClient {
         List<String> listOfSymbols = new ArrayList<>(symbols);
 
         // preparing OrderBook objects - always before opening connection
-        prepareOrderBooks(symbols, isSpot, name, sessionPool);
+        obService.prepareOrderBooks(symbols, true, name);
 
         // subscribing to binance streams
         for (int i = 0; i < symbols.size(); i += chunkSize) {
             var chunkOfSymbols = listOfSymbols.subList(i, Math.min(listOfSymbols.size(), i + chunkSize));
-            var params = buildDepthParam(chunkOfSymbols);
+            var params = buildDepthParam(chunkOfSymbols, true);
             if (!subscribe(params, generateId())) return;
         }
 
@@ -148,17 +143,17 @@ public class WSDepthClient {
                     .limit(chunkSize)
                     .toList();
 
-            var params = buildDepthParam(chunkOfSymbols);
+            var params = buildDepthParam(chunkOfSymbols, true);
             if (!unsubscribe(params, generateId())) return;
         }
 
         // dropping related order book objects to free memory.
-        dropOrderBooks(symbols, isSpot);
+        obService.dropOrderBooks(symbols, true);
     }
 
     public boolean subscribe(Collection<String> params, String id) {
         try {
-            var request = new BinanceSubscriptionRequest("SUBSCRIBE", params, id);
+            var request = new WSSubscriptionRequest("SUBSCRIBE", params, id);
             String message = new ObjectMapper().writeValueAsString(request);
             return sendMessage(message);
         } catch (Exception e) {
@@ -169,7 +164,7 @@ public class WSDepthClient {
 
     public boolean unsubscribe(Collection<String> params, String id) {
         try {
-            var request = new BinanceSubscriptionRequest("UNSUBSCRIBE", params, id);
+            var request = new WSSubscriptionRequest("UNSUBSCRIBE", params, id);
             String message = new ObjectMapper().writeValueAsString(request);
             return sendMessage(message);
         } catch (Exception e) {
@@ -179,16 +174,16 @@ public class WSDepthClient {
     }
 
     public boolean sendMessage(String message) {
-        if (session == null || !session.isOpen()) {
+        if (session != null && session.isOpen()) {
+            try {
+                session.sendMessage(new TextMessage(message));
+                return true;
+            } catch (Exception e) {
+                log.warn("{} couldn't send message to server - {}", name, e.getMessage());
+                return false;
+            }
+        } else {
             log.warn("{} cannot send message - no active WebSocket session", name);
-            return false;
-        }
-
-        try {
-            session.sendMessage(new TextMessage(message));
-            return true;
-        } catch (Exception e) {
-            log.warn("{} couldn't send message to server - {}", name, e.getMessage());
             return false;
         }
     }
@@ -205,51 +200,26 @@ public class WSDepthClient {
         }
     }
 
-    private Set<String> buildDepthParam(Collection<String> symbols) {
+    protected Set<String> buildDepthParam(Collection<String> symbols, boolean isSpot) {
         Set<String> params = new HashSet<>();
         String prefix = isSpot ? "@depth" : "@depth@500ms";
         symbols.forEach(symbol -> params.add(symbol + prefix));
         return params;
     }
 
-    private String generateId() {
+    protected String generateId() {
         return "" + ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE);
     }
 
-    private Set<String> getUnconnectedSymbols(Set<String> allSymbols) {
+    protected Set<String> getUnconnectedSymbols(Set<String> allSymbols) {
         Set<String> unconnectedSymbols = new HashSet<>(allSymbols);
         unconnectedSymbols.removeAll(connectedSymbols);
         return unconnectedSymbols;
     }
 
-    private Set<String> getDeletedSymbols(Set<String> allSymbols) {
+    protected Set<String> getDeletedSymbols(Set<String> allSymbols) {
         Set<String> deletedSymbols = new HashSet<>(connectedSymbols);
         deletedSymbols.removeAll(allSymbols);
         return deletedSymbols;
-    }
-
-    private class DepthHandler extends TextWebSocketHandler {
-        @Override
-        protected void handleTextMessage(@NonNull WebSocketSession session, @NonNull TextMessage message) {
-            messageHandler.take(message);
-        }
-
-        @Override
-        public void afterConnectionEstablished(@NonNull WebSocketSession session) {
-            log.info("{} websocket connection established with uri {}", name, wsUrl);
-        }
-
-        @Override
-        public void handleTransportError(@NonNull WebSocketSession session, @NonNull Throwable exception) {
-            log.error("Transport error: {}", exception.getMessage());
-        }
-
-        @Override
-        public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
-            log.info("{} Disconnected from websocket with code {} and reason \"{}\"", name, status.getCode(), status.getReason());
-            if (status.getReason() != null || status.getCode() == 1006) {
-                reconnect();
-            }
-        }
     }
 }

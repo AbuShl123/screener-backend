@@ -1,34 +1,31 @@
 package dev.abu.screener_backend.binance;
 
-import dev.abu.screener_backend.websockets.SessionPool;
+import dev.abu.screener_backend.binance.depth.WSFutDepthClient;
+import dev.abu.screener_backend.binance.depth.WSSpotDepthClient;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.Set;
 
-import static dev.abu.screener_backend.binance.OBManager.printReSyncMap;
-import static dev.abu.screener_backend.utils.EnvParams.STREAM_FUT_URL;
-import static dev.abu.screener_backend.utils.EnvParams.STREAM_SPOT_URL;
+import static dev.abu.screener_backend.binance.OBService.printReSyncMap;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class BinanceService {
 
     private final TickerService tickerService;
-    private final WSDepthClient spotDepthClient;
-    private final WSDepthClient futDepthClient;
+    private final OBService OBService;
+    private final WSSpotDepthClient spotDepthClient;
+    private final WSFutDepthClient futDepthClient;
 
-    public BinanceService(TickerService tickerService, SessionPool sessionPool) {
-        this.tickerService = tickerService;
-        this.spotDepthClient = new WSDepthClient(STREAM_SPOT_URL, true, sessionPool);
-        this.futDepthClient = new WSDepthClient(STREAM_FUT_URL, false, sessionPool);
+    @PostConstruct
+    public void setup() {
         spotDepthClient.startWebSocket();
         futDepthClient.startWebSocket();
-        setup();
-    }
-
-    public void setup() {
         syncEveryMinute();
     }
 
@@ -36,28 +33,19 @@ public class BinanceService {
     public void syncEveryMinute() {
         printReSyncMap();
         tickerService.syncTickerPrices();
-        OBManager.updateDistancesAndLevels();
+        OBService.updateDistancesAndLevels();
     }
 
     @Scheduled(fixedDelay = 15 * 60_000)
     public void tickersUpdate() {
         tickerService.updateTickers();
-        spotDepthClient.listenToSymbols(tickerService.getSpotSymbols());
-        futDepthClient.listenToSymbols(tickerService.getFutSymbols());
+        spotDepthClient.listenToSymbols(Set.of("bnbusdt"));
+        futDepthClient.listenToSymbols(Set.of("bnbusdt"));
     }
 
     @Scheduled(initialDelay = 60_000, fixedDelay = 180_000)
     public void sendPongMessage() {
         spotDepthClient.sendPongMessage();
         futDepthClient.sendPongMessage();
-    }
-
-    public static void waitFor(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.error("Error while waiting: ", e);
-        }
     }
 }

@@ -1,23 +1,27 @@
 package dev.abu.screener_backend.analysis;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.abu.screener_backend.binance.TickerService;
+import dev.abu.screener_backend.binance.depth.DepthUpdate;
+import dev.abu.screener_backend.binance.depth.PriceLevel;
 import dev.abu.screener_backend.websockets.SessionPool;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
-import static dev.abu.screener_backend.binance.DepthClient.getInitialSnapshot;
-import static dev.abu.screener_backend.binance.OBManager.*;
+import java.util.List;
+
+import static dev.abu.screener_backend.binance.depth.DepthClient.getInitialSnapshot;
+import static dev.abu.screener_backend.binance.OBService.*;
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 import static dev.abu.screener_backend.utils.EnvParams.MAX_INCLINE;
+import static java.lang.Double.parseDouble;
 import static java.lang.Math.abs;
 import static java.lang.Math.round;
 
 @Slf4j
 public class OrderBook {
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper;
     private final String websocketName;
     private final boolean isSpot;
     private boolean isInitialEvent = false;
@@ -33,69 +37,72 @@ public class OrderBook {
     @Getter
     private boolean isReSync = true;
 
-    public OrderBook(String marketSymbol, boolean isSpot, String websocketName, SessionPool sessionPool) {
+    public OrderBook(
+            String marketSymbol,
+            boolean isSpot,
+            String websocketName,
+            SessionPool sessionPool,
+            ObjectMapper mapper
+    ) {
         this.marketSymbol = marketSymbol;
         this.tradeList = new TradeList(marketSymbol, sessionPool);
         this.isSpot = isSpot;
         this.websocketName = websocketName;
-    }
-
-    public Trade getMaxTrade(boolean isAsk) {
-        return tradeList.getMaxTrade(isAsk);
+        this.mapper = mapper;
     }
 
     public boolean isScheduleNeeded() {
         return !isTaskScheduled && isReSync;
     }
 
-    public void process(JsonNode root) {
+    public void process(DepthUpdate depthUpdate) {
         // if re-sync is needed and there is no task that is queued for concurrent run,
         // then process this event concurrently to get the initial snapshot
         if (isScheduleNeeded()) {
-            processEventConcurrently(root);
+            processEventConcurrently(depthUpdate);
         }
 
         // if initial snapshot has already been processed (in which case no task is scheduled for concurrent run),
         // then process the events as usual
         else if (!isTaskScheduled) {
-            processEvent(root);
+            processEvent(depthUpdate);
         }
 
         // in any other case, events will be ignored, so they should be kept in the buffer.
     }
 
-    private void processEventConcurrently(JsonNode root) {
+    private void processEventConcurrently(DepthUpdate depthUpdate) {
         isTaskScheduled = true;
         scheduleTask(() -> {
-            startProcessing(root);
+            startProcessing(depthUpdate);
             isTaskScheduled = false;
         }, isSpot);
     }
 
-    private void startProcessing(JsonNode root) {
-        long U = root.get("U").asLong();
-        long u = root.get("u").asLong();
+    private void startProcessing(DepthUpdate depthUpdate) {
+        long U = depthUpdate.getFirstUpdateId();
+        long u = depthUpdate.getFinalUpdateId();
         processInitialSnapshot(U);
-        processInitialEvent(root, U, u);
+        processInitialEvent(depthUpdate, U, u);
     }
 
-    private void processEvent(JsonNode root) {
-        long U = root.get("U").asLong();
-        long u = root.get("u").asLong();
+    private void processEvent(DepthUpdate depthUpdate) {
+        long U = depthUpdate.getFirstUpdateId();
+        long u = depthUpdate.getFinalUpdateId();
 
         if (isInitialEvent) {
-            processInitialEvent(root, U, u);
+            processInitialEvent(depthUpdate, U, u);
         } else if (isSpot) {
-            processSpotEvent(root, U, u);
+            processSpotEvent(depthUpdate, U, u);
         } else {
-            processFutEvent(root, u);
+            processFutEvent(depthUpdate, u);
         }
     }
 
-    private void processInitialEvent(JsonNode root, long U, long u) {
+    private void processInitialEvent(DepthUpdate depthUpdate, long U, long u) {
         if (lastUpdateId >= U && lastUpdateId <= u) {
             lastUpdateId = u;
-            analyzeData(root, false);
+            analyzeData(depthUpdate);
             isInitialEvent = false;
             incrementReSyncCount(websocketName, marketSymbol);
         } else if (U > lastUpdateId) {
@@ -103,20 +110,20 @@ public class OrderBook {
         }
     }
 
-    private void processSpotEvent(JsonNode root, long U, long u) {
+    private void processSpotEvent(DepthUpdate depthUpdate, long U, long u) {
         if (lastUpdateId + 1 >= U && lastUpdateId < u) {
             lastUpdateId = u;
-            analyzeData(root, false);
+            analyzeData(depthUpdate);
         } else {
             startReSync();
         }
     }
 
-    private void processFutEvent(JsonNode root, long u) {
-        long pu = root.get("pu").asLong();
+    private void processFutEvent(DepthUpdate depthUpdate, long u) {
+        long pu = depthUpdate.getLastUpdateId();
         if (lastUpdateId == pu) {
             lastUpdateId = u;
-            analyzeData(root, false);
+            analyzeData(depthUpdate);
         } else {
             startReSync();
         }
@@ -133,15 +140,15 @@ public class OrderBook {
 
         try {
             lastUpdateId = 0;
-            JsonNode snapshot;
+            DepthUpdate snapshot;
 
             do {
                 raw = getInitialSnapshot(marketSymbol.replace(FUT_SIGN, ""), isSpot);
-                snapshot = mapper.readTree(raw);
-                lastUpdateId = snapshot.get("lastUpdateId").asLong();
+                snapshot = mapper.readValue(raw, DepthUpdate.class);
+                lastUpdateId = snapshot.getLastUpdateId();
             } while (lastUpdateId < U);
 
-            analyzeData(snapshot, true);
+            analyzeData(snapshot);
             isReSync = false;
             isInitialEvent = true;
 
@@ -151,35 +158,30 @@ public class OrderBook {
         }
     }
 
-    private void analyzeData(JsonNode root, boolean isSnapshot) {
-        JsonNode asks = isSnapshot ? root.get("asks") : root.get("a");
-        JsonNode bids = isSnapshot ? root.get("bids") : root.get("b");
-        analyze(root, asks, bids);
+    private void analyzeData(DepthUpdate depthUpdate) {
+        List<PriceLevel> asks = depthUpdate.getAsks();
+        List<PriceLevel> bids = depthUpdate.getBids();
+        analyze(depthUpdate, asks, bids);
     }
 
-    private void analyze(JsonNode root, JsonNode asksArray, JsonNode bidsArray) {
-        long timestamp = getTimeStamp(root);
-        traverseArray(asksArray, timestamp, true);
-        traverseArray(bidsArray, timestamp, false);
+    private void analyze(DepthUpdate depthUpdate, List<PriceLevel> asks, List<PriceLevel> bids) {
+        long timestamp = getTimeStamp(depthUpdate);
+        traverseArray(asks, timestamp, true);
+        traverseArray(bids, timestamp, false);
     }
 
-    private long getTimeStamp(JsonNode root) {
-        JsonNode eField = root.get("E");
-        if (eField == null) return System.currentTimeMillis();
-        long timestamp = eField.asLong();
-        return timestamp == 0 ? System.currentTimeMillis() : timestamp;
+    private long getTimeStamp(DepthUpdate depthUpdate) {
+        long e = depthUpdate.getEventTime();
+        return e == 0 ? System.currentTimeMillis() : e;
     }
 
-    private void traverseArray(JsonNode array, long timestamp, boolean isAsk) {
-        if (array == null || (array.isArray() && array.isEmpty())) {
-            return;
-        }
-        for (JsonNode node : array) {
-            var price = node.get(0).asDouble();
-            var qty = node.get(1).asDouble();
+    private void traverseArray(List<PriceLevel> array, long timestamp, boolean isAsk) {
+        for (PriceLevel priceLevel : array) {
+            double price = parseDouble(priceLevel.price());
+            double quantity = parseDouble(priceLevel.quantity());
             double distance = getDistance(price);
             if (distance <= MAX_INCLINE) {
-                tradeList.addTrade(price, qty, distance, isAsk, timestamp);
+                tradeList.addTrade(price, quantity, distance, isAsk, timestamp);
             }
         }
     }

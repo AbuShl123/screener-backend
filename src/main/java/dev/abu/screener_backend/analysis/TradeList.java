@@ -6,9 +6,13 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 import java.util.TreeSet;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
-import static dev.abu.screener_backend.analysis.DensityAnalyzer.getLevel;
 import static dev.abu.screener_backend.utils.EnvParams.CUP_SIZE;
 import static dev.abu.screener_backend.utils.EnvParams.MAX_INCLINE;
 import static java.lang.Math.abs;
@@ -21,6 +25,7 @@ public class TradeList {
     private final TreeSet<Trade> asks = new TreeSet<>();
     private final Map<Double, Trade> bidsMap = new HashMap<>();
     private final Map<Double, Trade> asksMap = new HashMap<>();
+    private final LevelAnalyzer levelAnalyzer;
     @Getter
     private final String mSymbol;
     private final SessionPool sessionPool;
@@ -28,6 +33,7 @@ public class TradeList {
     TradeList(String mSymbol, SessionPool sessionPool) {
         this.mSymbol = mSymbol;
         this.sessionPool = sessionPool;
+        this.levelAnalyzer = new LevelAnalyzer();
     }
 
     public void clear() {
@@ -88,7 +94,7 @@ public class TradeList {
         // add trade IF:
         // 1) size of tree set is less than cup_size
         // 2) OR IF smallest trade in the tree set is smaller than the new trade
-        int level = getLevel(price, qty, distance, mSymbol);
+        int level = levelAnalyzer.getLevel(price, qty, distance, mSymbol);
         if (tradeSet.size() < CUP_SIZE || tradeSet.first().compareToRawValues(level, qty, price) < 0) {
             timestamp = loadTimestampFromMemory(price, timestamp);
             addNewTrade(isAsk, price, qty, distance, level, timestamp);
@@ -157,7 +163,7 @@ public class TradeList {
     }
 
     private void updateLevel(Trade trade) {
-        trade.setLevel(getLevel(trade.getPrice(), trade.getQuantity(), trade.getDistance(), mSymbol));
+        trade.setLevel(levelAnalyzer.getLevel(trade.getPrice(), trade.getQuantity(), trade.getDistance(), mSymbol));
     }
 
     private long loadTimestampFromMemory(double price, long timestamp) {

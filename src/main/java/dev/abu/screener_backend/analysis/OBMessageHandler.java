@@ -1,9 +1,8 @@
 package dev.abu.screener_backend.analysis;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.abu.screener_backend.binance.OBService;
+import dev.abu.screener_backend.binance.depth.DepthUpdate;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.socket.TextMessage;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -12,8 +11,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-import static dev.abu.screener_backend.binance.OBManager.getNumOfScheduledTasks;
-import static dev.abu.screener_backend.binance.OBManager.getOrderBook;
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
 @Slf4j
@@ -32,21 +29,25 @@ public class OBMessageHandler {
     private static long lastCountUpdate = System.currentTimeMillis();
     private static int totalEventCount = 0;
 
-    private final ConcurrentLinkedQueue<String> queue;
-    private final ObjectMapper mapper;
+    private final ConcurrentLinkedQueue<DepthUpdate> queue;
     private final boolean isSpot;
+    private final OBService obService;
 
-    public OBMessageHandler(boolean isSpot) {
+    public OBMessageHandler(boolean isSpot, OBService obService) {
         this.queue = new ConcurrentLinkedQueue<>();
-        this.mapper = new ObjectMapper();
         this.isSpot = isSpot;
-        ScheduledExecutorService execService = Executors.newSingleThreadScheduledExecutor();
+        this.obService = obService;
+        ScheduledExecutorService execService = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r);
+            t.setName((isSpot ? "spot" : "fut") + "-msg-processor");
+            return t;
+        });
         execService.scheduleAtFixedRate(this::processor, 1000L, 1000L, TimeUnit.MILLISECONDS);
     }
 
-    public synchronized void take(TextMessage message) {
+    public synchronized void take(DepthUpdate depthUpdate) {
         if (queue.size() > QUEUE_CAPACITY) queue.clear();
-        queue.add(message.getPayload());
+        queue.add(depthUpdate);
     }
 
     private void processor() {
@@ -56,8 +57,8 @@ public class OBMessageHandler {
 
         Set<String> ineligibleSet = new HashSet<>();
         int count = 0;
-        for (String message : queue) {
-            handleMessage(message, ineligibleSet);
+        for (DepthUpdate depthUpdate : queue) {
+            handleMessage(depthUpdate, ineligibleSet);
             count++;
         }
 
@@ -65,42 +66,42 @@ public class OBMessageHandler {
         if (duration > 2000) log.info("Finished processing {} events in {}ms", count, duration);
     }
 
-    private void handleMessage(String message, Set<String> ineligibleSet) {
+    private void handleMessage(DepthUpdate depthUpdate, Set<String> ineligibleSet) {
         try {
-
-            JsonNode root = mapper.readTree(message);
-            JsonNode eventType = root.get("e");
-            if (eventType == null || !eventType.asText().equals("depthUpdate")) {
-                queue.remove(message);
+            String eventType = depthUpdate.getEventType();
+            if (eventType == null || !eventType.equals("depthUpdate")) {
+                queue.remove(depthUpdate);
                 return;
             }
 
-            JsonNode symbolNode = root.get("s");
-            if (symbolNode == null) {
-                queue.remove(message);
+            String symbol = depthUpdate.getSymbol();
+            if (symbol == null) {
+                queue.remove(depthUpdate);
                 return;
             }
 
-            String symbol = symbolNode.asText().toLowerCase();
-            var marketSymbol = symbol + (isSpot ? "" : FUT_SIGN);
+            String marketSymbol = symbol + (isSpot ? "" : FUT_SIGN);
 
             if (ineligibleSet.contains(marketSymbol)) return;
-            OrderBook orderBook = getOrderBook(marketSymbol);
+            OrderBook orderBook = obService.getOrderBook(marketSymbol);
 
             if (orderBook == null) {
-                queue.remove(message);
+                queue.remove(depthUpdate);
+
             } else if (orderBook.isTaskScheduled()) {
                 ineligibleSet.add(symbol);
-            } else if (orderBook.isScheduleNeeded() && getNumOfScheduledTasks(isSpot) > SCHEDULE_THRESHOLD) {
-                queue.remove(message);
+
+            } else if (orderBook.isScheduleNeeded() && obService.getNumOfScheduledTasks(isSpot) > SCHEDULE_THRESHOLD) {
+                queue.remove(depthUpdate);
+
             } else {
-                orderBook.process(root);
-                queue.remove(message);
+                orderBook.process(depthUpdate);
+                queue.remove(depthUpdate);
                 analyzeEventCount();
             }
 
         } catch (Exception e) {
-            log.error("Failed to read json data - {}", message, e);
+            log.error("Failed to read json data - {}", depthUpdate, e);
         }
     }
 

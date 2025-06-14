@@ -1,4 +1,4 @@
-package dev.abu.screener_backend.binance;
+package dev.abu.screener_backend.binance.depth;
 
 import java.util.Collection;
 
@@ -8,7 +8,7 @@ import java.util.Collection;
  * @param params streams to connect for. For example: ["btcusdt@depth", "bnbusdt@depth"]
  * @param id string that represents 32-bit number.
  */
-public record BinanceSubscriptionRequest(
+public record WSSubscriptionRequest(
         String method,
         Collection<String> params,
         String id
