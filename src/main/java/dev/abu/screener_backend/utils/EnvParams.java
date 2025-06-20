@@ -16,7 +16,7 @@ public class EnvParams {
     public static final String STREAM_FUT_URL;
     public static final int CHUNK_SIZE;
     public static final int CUP_SIZE;
-    public static final int MAX_INCLINE;
+    public static final int MAX_PERCENT_DISTANCE_FROM_MARKET;
     public static final String FUT_SIGN;
 
     private EnvParams() {}
@@ -44,7 +44,7 @@ public class EnvParams {
 
         CHUNK_SIZE = Integer.parseInt(chunkSize);
         CUP_SIZE = Integer.parseInt(cupSize);
-        MAX_INCLINE = Integer.parseInt(maxIncline);
+        MAX_PERCENT_DISTANCE_FROM_MARKET = Integer.parseInt(maxIncline);
         FUT_SIGN = properties.getProperty("fut-sign");
     }
 }

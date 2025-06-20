@@ -1,216 +1,114 @@
 package dev.abu.screener_backend.analysis;
 
-import dev.abu.screener_backend.websockets.SessionPool;
+import dev.abu.screener_backend.settings.Settings;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Random;
-import java.util.TreeSet;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
-import static dev.abu.screener_backend.utils.EnvParams.CUP_SIZE;
-import static dev.abu.screener_backend.utils.EnvParams.MAX_INCLINE;
-import static java.lang.Math.abs;
-import static java.lang.Math.round;
+import static dev.abu.screener_backend.settings.SettingsType.COINS;
+import static dev.abu.screener_backend.settings.SettingsType.DOLLAR;
+import static java.lang.Math.*;
 
 @Slf4j
 public class TradeList {
-    private final Map<Double, Long> backup = new HashMap<>();
-    private final TreeSet<Trade> bids = new TreeSet<>();
-    private final TreeSet<Trade> asks = new TreeSet<>();
-    private final Map<Double, Trade> bidsMap = new HashMap<>();
-    private final Map<Double, Trade> asksMap = new HashMap<>();
-    private final LevelAnalyzer levelAnalyzer;
-    @Getter
-    private final String mSymbol;
-    private final SessionPool sessionPool;
 
-    TradeList(String mSymbol, SessionPool sessionPool) {
-        this.mSymbol = mSymbol;
-        this.sessionPool = sessionPool;
-        this.levelAnalyzer = new LevelAnalyzer();
+    private final LinkedList<Trade> availableObjects;
+    @Getter private final PriorityQueue<Trade> bids;
+    @Getter private final PriorityQueue<Trade> asks;
+    @Getter private final Settings settings;
+    @Getter private int highestLevel;
+
+    public TradeList(Settings settings) {
+        var comparator = Comparator
+                .comparingInt(Trade::getLevel)
+                .thenComparingDouble(Trade::getQuantity)
+                .thenComparingDouble(Trade::getPrice);
+        bids = new PriorityQueue<>(comparator);
+        asks = new PriorityQueue<>(comparator);
+        availableObjects = new LinkedList<>();
+        this.settings = settings;
+        init();
     }
 
-    public void clear() {
-        sessionPool.removeData(mSymbol);
-        backup.clear();
-        bids.forEach(t -> backup.put(t.getPrice(), t.getLife()));
-        asks.forEach(t -> backup.put(t.getPrice(), t.getLife()));
+    private void init() {
+        for (int i = 0; i < 10; i++) {
+            availableObjects.add(new Trade());
+        }
+    }
+
+    public void process(
+            Map<Double, Double> bidsMap,
+            Map<Double, Double> asksMap,
+            Map<Double, Long> bidsTime,
+            Map<Double, Long> asksTime,
+            double marketPrice
+    ) {
+        highestLevel = 0;
+        availableObjects.addAll(bids);
+        availableObjects.addAll(asks);
         bids.clear();
         asks.clear();
-        bidsMap.clear();
-        asksMap.clear();
+
+        keep5LargestTrades(marketPrice, bidsMap, bidsTime, bids);
+        keep5LargestTrades(marketPrice, asksMap, asksTime, asks);
     }
 
-    public synchronized void addTrade(double price, double qty, double distance, boolean isAsk, long timestamp) {
-        processTrade(price, qty, distance, isAsk, timestamp);
-//        checkDataInvariants();
-        if (getMaxLevel() >= 1) {
-            sessionPool.addData(new TradeListDTO(mSymbol, bids, asks));
-        } else {
-            sessionPool.removeData(mSymbol);
-        }
-    }
+    private void keep5LargestTrades(
+            double marketPrice,
+            Map<Double, Double> orders,
+            Map<Double, Long> timeDetected,
+            PriorityQueue<Trade> pq
+    ) {
+        for (var priceLevel : orders.entrySet()) {
 
-    public synchronized void updateLevelsAndDistances(double marketPrice) {
-        updateLevelsAndDistances(true, marketPrice);
-        updateLevelsAndDistances(false, marketPrice);
-    }
+            double price = priceLevel.getKey();
+            double quantity = priceLevel.getValue();
+            double dist = getDistance(price, marketPrice);
+            int level = getLevel(price, quantity, dist);
+            long time = timeDetected.getOrDefault(price, System.currentTimeMillis());
 
-    public Trade getMaxTrade(boolean isAsk) {
-        TreeSet<Trade> trades = getTradeSet(isAsk);
-        if (trades.isEmpty()) return null;
-        return trades.last();
-    }
-
-    public int getMaxLevel() {
-        return Math.max(
-                asks.isEmpty() ? -1 : asks.last().getLevel(),
-                bids.isEmpty() ? -1 : bids.last().getLevel()
-        );
-    }
-
-    private void processTrade(double price, double qty, double distance, boolean isAsk, long timestamp) {
-        var tradeSet = getTradeSet(isAsk);
-        var tradeMap = getTradeMap(isAsk);
-
-        // case when price level should be removed
-        if (qty == 0) {
-            removeTradeByPrice(isAsk, price);
-            return;
-        }
-
-        // case when there is already a trade with the given price
-        if (tradeMap.containsKey(price)) {
-            updateQuantity(isAsk, price, qty);
-            return;
-        }
-
-        // add trade IF:
-        // 1) size of tree set is less than cup_size
-        // 2) OR IF smallest trade in the tree set is smaller than the new trade
-        int level = levelAnalyzer.getLevel(price, qty, distance, mSymbol);
-        if (tradeSet.size() < CUP_SIZE || tradeSet.first().compareToRawValues(level, qty, price) < 0) {
-            timestamp = loadTimestampFromMemory(price, timestamp);
-            addNewTrade(isAsk, price, qty, distance, level, timestamp);
-
-            // making sure that size won't exceed the given cup size
-            if (tradeSet.size() > CUP_SIZE) {
-                removeSmallestTrade(isAsk);
-            }
-        }
-    }
-
-    private void addNewTrade(boolean isAsk, double price, double qty, double distance, int level, long timestamp) {
-        Trade trade = new Trade(price, qty, distance, level, timestamp);
-        if (getTradeSet(isAsk).add(trade)) {
-            getTradeMap(isAsk).put(price, trade);
-        }
-    }
-
-    private void updateQuantity(boolean isAsk, double price, double quantity) {
-        var tradeSet = getTradeSet(isAsk);
-        var t = getTradeMap(isAsk).get(price);
-
-        tradeSet.remove(t);
-        t.setQuantity(quantity);
-        updateLevel(t);
-        tradeSet.add(t);
-    }
-
-    private void removeTradeByPrice(boolean isAsk, double price) {
-        Trade trade = getTradeMap(isAsk).remove(price);
-        if (trade != null) {
-            if (!getTradeSet(isAsk).remove(trade)) log.error("Couldn't remove trade from set: {}", trade);
-        }
-    }
-
-    private void removeSmallestTrade(boolean isAsk) {
-        Trade trade = getTradeSet(isAsk).pollFirst();
-        if (trade != null) {
-            if (getTradeMap(isAsk).remove(trade.getPrice()) == null) {
-                log.error("Couldn't remove trade from map: {}", trade);
-            }
-        }
-    }
-
-    private void updateLevelsAndDistances(boolean isAsk, double marketPrice) {
-        var set = getTradeSet(isAsk);
-        set.clear();
-
-        var it = getTradeMap(isAsk).values().iterator();
-        while (it.hasNext()) {
-            var t = it.next();
-            double newDistance = getDistance(t.getPrice(), marketPrice);
-            if (newDistance >= MAX_INCLINE) {
-                it.remove();
+            // if pq has 5 elements and the smallest element is greater than the current trade,
+            // then there is no need to add it.
+            if (pq.size() == 5 && pq.peek().isGreaterThan(level, quantity, price)) {
                 continue;
             }
-            t.setDistance(newDistance);
-            updateLevel(t);
-            set.add(t);
+
+            highestLevel = max(highestLevel, level);
+
+            // otherwise, if pq has 5 elements then remove the smallest element from the pq
+            if (pq.size() == 5) {
+                availableObjects.addLast(pq.poll());
+            }
+
+            Trade trade = availableObjects.pollLast();
+            if (trade == null) {
+                trade = new Trade(); // fallback
+            }
+            trade.set(price, quantity, dist, level, time);
+            pq.offer(trade);
         }
+    }
+
+    private int getLevel(double price, double quantity, double distance) {
+        double volume = settings.getSettingsType() == DOLLAR ? price * quantity : quantity;
+        LinkedHashMap<Double, Integer> settingsMap = settings.getEntries();
+
+        int level = 0;
+        int i = 1;
+        for (Map.Entry<Double, Integer> entry : settingsMap.entrySet()) {
+            if (distance <= entry.getKey() && volume >= entry.getValue()) {
+               level = i;
+            }
+            i++;
+        }
+
+        return level;
     }
 
     private double getDistance(double price, double marketPrice) {
         double distance = abs((price - marketPrice) / marketPrice * 100);
-        return round(distance * 100.0) / 100.0;
-    }
-
-    private void updateLevel(Trade trade) {
-        trade.setLevel(levelAnalyzer.getLevel(trade.getPrice(), trade.getQuantity(), trade.getDistance(), mSymbol));
-    }
-
-    private long loadTimestampFromMemory(double price, long timestamp) {
-        long timestampFromMemory = backup.getOrDefault(price, -1L);
-        if (timestampFromMemory > 0) return timestampFromMemory;
-        return timestamp;
-    }
-
-    private TreeSet<Trade> getTradeSet(boolean isAsk) {
-        return isAsk ? asks : bids;
-    }
-
-    private Map<Double, Trade> getTradeMap(boolean isAsk) {
-        return isAsk ? asksMap : bidsMap;
-    }
-
-    private void checkDataInvariants() {
-        boolean failedBids = false;
-        if (bids.size() != bidsMap.size()) {
-            failedBids = true;
-        } else {
-            for (Trade bid : bids) {
-                if (!bidsMap.containsKey(bid.getPrice())) {
-                    failedBids = true;
-                    break;
-                }
-            }
-        }
-        if (failedBids) {
-            log.error("bids set and bids map are not equal: bidsSet={}, bidsMap={}", bids, bidsMap);
-        }
-
-        boolean failedAsks = false;
-        if (asks.size() != asksMap.size()) {
-            failedAsks = true;
-        } else {
-            for (Trade ask : asks) {
-                if (!asksMap.containsKey(ask.getPrice())) {
-                    failedAsks = true;
-                    break;
-                }
-            }
-        }
-        if (failedAsks) {
-            log.error("asks set and asks map are not equal: asksSet={}, asksMap={}", asks, asksMap);
-        }
-
-        if (failedBids || failedAsks) System.exit(1);
+        return round(distance * 10.0) / 10.0;
     }
 }

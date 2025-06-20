@@ -37,4 +37,8 @@ public class DepthUpdate {
     @JsonAlias({"asks"})
     @JsonDeserialize(using = PriceLevelListDeserializer.class)
     private List<PriceLevel> asks;
+
+    public String getSymbol() {
+        return symbol.toLowerCase();
+    }
 }

@@ -1,4 +1,4 @@
-package dev.abu.screener_backend.config;
+package dev.abu.screener_backend.websockets;
 
 import dev.abu.screener_backend.registration.JwtService;
 import dev.abu.screener_backend.subscription.SubscriptionService;
@@ -33,7 +33,7 @@ public class WebSocketHandshakeInterceptor implements HandshakeInterceptor {
             @NonNull ServerHttpResponse response,
             @NonNull WebSocketHandler wsHandler,
             @NonNull Map<String, Object> attributes
-    ) throws Exception {
+    ) {
         try {
             HttpServletRequest servletRequest = ((ServletServerHttpRequest) request).getServletRequest();
             String token = getToken(servletRequest);
@@ -48,6 +48,7 @@ public class WebSocketHandshakeInterceptor implements HandshakeInterceptor {
             boolean isUserSubscribed = subscriptionService.isUserSubscribed(user);
 
             if (isUserSubscribed) {
+                attributes.put("token", token);
                 return true;
             } else {
                 response.setStatusCode(HttpStatus.FORBIDDEN);

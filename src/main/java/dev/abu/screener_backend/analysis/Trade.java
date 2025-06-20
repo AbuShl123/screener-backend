@@ -15,7 +15,7 @@ import static java.lang.Math.abs;
 @Setter
 @Getter
 @JsonSerialize(using = TradeSerializer.class)
-public class Trade implements Comparable<Trade>, Serializable {
+public class Trade {
 
     private double price;
     private double quantity;
@@ -23,34 +23,22 @@ public class Trade implements Comparable<Trade>, Serializable {
     private int level;
     private long life;
 
-    @Override
-    public int compareTo(Trade another) {
-        int cmp = Integer.compare(level, another.level);
-        if (cmp != 0) return cmp;
-        cmp = Double.compare(quantity, another.quantity);
-        if (cmp != 0) return cmp;
-        return Double.compare(price, another.price);
+    public void set(double price, double quantity, double distance, int level, long life) {
+        this.price = price;
+        this.quantity = quantity;
+        this.distance = distance;
+        this.level = level;
+        this.life = life;
     }
 
-    public int compareToRawValues(int level, double quantity, double price) {
-        int cmp = Integer.compare(this.level, level);
-        if (cmp != 0) return cmp;
-        cmp = Double.compare(this.quantity, quantity);
-        if (cmp != 0) return cmp;
-        return Double.compare(this.price, price);
-    }
-
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) return true;
-        if (obj == null || getClass() != obj.getClass()) return false;
-        Trade other = (Trade) obj;
-        return Double.compare(price, other.price) == 0;
-    }
-
-    @Override
-    public int hashCode() {
-        return Double.hashCode(price);
+    public boolean isGreaterThan(int level, double quantity, double price) {
+        if (this.level != level) {
+            return this.level > level;
+        }
+        if (Double.compare(this.quantity, quantity) != 0) {
+            return this.quantity > quantity;
+        }
+        return this.price > price;
     }
 
     @Override

@@ -46,6 +46,16 @@ public abstract class WSDepthClient {
         OBService.prepareReSyncMap(name);
     }
 
+    public void startWebSocket() {
+        var future = client.execute(wsDepthHandler, baseUrl);
+        try {
+            session = future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("{} couldn't connect to websocket {}", name, e.getMessage());
+            reconnect();
+        }
+    }
+
     public void reconnect() {
         log.info("{} Attempting reconnection", name);
         disconnect();
@@ -57,7 +67,7 @@ public abstract class WSDepthClient {
         while (attempts < 5 && (session == null || !session.isOpen())) {
             try {
                 var future = client.execute(wsDepthHandler, baseUrl);
-                session = future.get(30, TimeUnit.SECONDS);
+                session = future.get(3, TimeUnit.MINUTES);
             } catch (Exception e) {
                 log.error("{} Reconnection attempt {} failed: {}", name, attempts, e.getMessage());
                 attempts++;
@@ -70,16 +80,6 @@ public abstract class WSDepthClient {
         }
 
         listenToSymbols(symbols);
-    }
-
-    public void startWebSocket() {
-        var future = client.execute(wsDepthHandler, baseUrl);
-        try {
-            session = future.get();
-        } catch (InterruptedException | ExecutionException e) {
-            log.error("{} couldn't connect to websocket {}", name, e.getMessage());
-            reconnect();
-        }
     }
 
     public void disconnect() {
@@ -115,12 +115,12 @@ public abstract class WSDepthClient {
         List<String> listOfSymbols = new ArrayList<>(symbols);
 
         // preparing OrderBook objects - always before opening connection
-        obService.prepareOrderBooks(symbols, true, name);
+        obService.prepareOrderBooks(symbols, isSpot, name);
 
         // subscribing to binance streams
         for (int i = 0; i < symbols.size(); i += chunkSize) {
             var chunkOfSymbols = listOfSymbols.subList(i, Math.min(listOfSymbols.size(), i + chunkSize));
-            var params = buildDepthParam(chunkOfSymbols, true);
+            var params = buildDepthParam(chunkOfSymbols, isSpot);
             if (!subscribe(params, generateId())) return;
         }
 
@@ -143,12 +143,12 @@ public abstract class WSDepthClient {
                     .limit(chunkSize)
                     .toList();
 
-            var params = buildDepthParam(chunkOfSymbols, true);
+            var params = buildDepthParam(chunkOfSymbols, isSpot);
             if (!unsubscribe(params, generateId())) return;
         }
 
         // dropping related order book objects to free memory.
-        obService.dropOrderBooks(symbols, true);
+        obService.dropOrderBooks(symbols, isSpot);
     }
 
     public boolean subscribe(Collection<String> params, String id) {

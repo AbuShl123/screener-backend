@@ -53,8 +53,7 @@ public class DepthClient {
         try {
             checkRateLimits(isSpot);
             String baseUri = isSpot ? SPOT_URL : FUT_URL;
-            int limit = isSpot ? 10_000 : 1000;
-            HttpGet depthRequest = new HttpGet(baseUri + "/depth?symbol=" + symbol.toUpperCase() + "&limit=" + limit);
+            HttpGet depthRequest = new HttpGet(baseUri + "/depth?symbol=" + symbol.toUpperCase() + "&limit=1000");
             depthRequest.addHeader("Accept", "application/json");
 
             try (var response = httpClient.execute(depthRequest)) {

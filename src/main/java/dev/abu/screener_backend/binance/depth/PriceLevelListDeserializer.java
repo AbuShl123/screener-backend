@@ -17,8 +17,8 @@ public class PriceLevelListDeserializer extends JsonDeserializer<List<PriceLevel
         JsonNode node = p.getCodec().readTree(p);
 
         for (JsonNode level : node) {
-            String price = level.get(0).asText();
-            String quantity = level.get(1).asText();
+            double price = level.get(0).asDouble();
+            double quantity = level.get(1).asDouble();
             result.add(new PriceLevel(price, quantity));
         }
 

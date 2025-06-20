@@ -1,22 +1,18 @@
 package dev.abu.screener_backend.analysis;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.abu.screener_backend.binance.TickerService;
 import dev.abu.screener_backend.binance.depth.DepthUpdate;
-import dev.abu.screener_backend.binance.depth.PriceLevel;
-import dev.abu.screener_backend.websockets.SessionPool;
+import dev.abu.screener_backend.settings.Settings;
+import dev.abu.screener_backend.websockets.SessionManager;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
-import static dev.abu.screener_backend.binance.depth.DepthClient.getInitialSnapshot;
 import static dev.abu.screener_backend.binance.OBService.*;
+import static dev.abu.screener_backend.binance.depth.DepthClient.getInitialSnapshot;
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
-import static dev.abu.screener_backend.utils.EnvParams.MAX_INCLINE;
-import static java.lang.Double.parseDouble;
-import static java.lang.Math.abs;
-import static java.lang.Math.round;
 
 @Slf4j
 public class OrderBook {
@@ -24,31 +20,37 @@ public class OrderBook {
     private final ObjectMapper mapper;
     private final String websocketName;
     private final boolean isSpot;
+    private final SessionManager sessionManager;
     private boolean isInitialEvent = false;
 
     @Getter
-    private final TradeList tradeList;
+    private final GeneralTradeList generalTradeList;
     @Getter
-    private final String marketSymbol;
+    private final Map<Settings, TradeList> tls;
+    @Getter
+    private final String mSymbol;
     @Getter
     private long lastUpdateId;
     @Getter
     private boolean isTaskScheduled = false;
-    @Getter
     private boolean isReSync = true;
 
     public OrderBook(
-            String marketSymbol,
+            String mSymbol,
             boolean isSpot,
             String websocketName,
-            SessionPool sessionPool,
-            ObjectMapper mapper
+            ObjectMapper mapper,
+            SessionManager sessionManager,
+            TradeList defaultTl
     ) {
-        this.marketSymbol = marketSymbol;
-        this.tradeList = new TradeList(marketSymbol, sessionPool);
+        this.mSymbol = mSymbol;
+        this.sessionManager = sessionManager;
+        this.generalTradeList = new GeneralTradeList();
+        this.tls = new ConcurrentHashMap<>();
         this.isSpot = isSpot;
         this.websocketName = websocketName;
         this.mapper = mapper;
+        tls.put(defaultTl.getSettings(), defaultTl);
     }
 
     public boolean isScheduleNeeded() {
@@ -102,9 +104,9 @@ public class OrderBook {
     private void processInitialEvent(DepthUpdate depthUpdate, long U, long u) {
         if (lastUpdateId >= U && lastUpdateId <= u) {
             lastUpdateId = u;
-            analyzeData(depthUpdate);
+            analyzeData(depthUpdate, false);
             isInitialEvent = false;
-            incrementReSyncCount(websocketName, marketSymbol);
+            incrementReSyncCount(websocketName, mSymbol);
         } else if (U > lastUpdateId) {
             startReSync();
         }
@@ -113,7 +115,7 @@ public class OrderBook {
     private void processSpotEvent(DepthUpdate depthUpdate, long U, long u) {
         if (lastUpdateId + 1 >= U && lastUpdateId < u) {
             lastUpdateId = u;
-            analyzeData(depthUpdate);
+            analyzeData(depthUpdate, false);
         } else {
             startReSync();
         }
@@ -123,7 +125,7 @@ public class OrderBook {
         long pu = depthUpdate.getLastUpdateId();
         if (lastUpdateId == pu) {
             lastUpdateId = u;
-            analyzeData(depthUpdate);
+            analyzeData(depthUpdate, false);
         } else {
             startReSync();
         }
@@ -131,8 +133,8 @@ public class OrderBook {
 
     private void startReSync() {
         isReSync = true;
-        decrementReSyncCount(websocketName, marketSymbol);
-        tradeList.clear();
+        decrementReSyncCount(websocketName, mSymbol);
+        generalTradeList.clear();
     }
 
     private void processInitialSnapshot(long U) {
@@ -143,12 +145,12 @@ public class OrderBook {
             DepthUpdate snapshot;
 
             do {
-                raw = getInitialSnapshot(marketSymbol.replace(FUT_SIGN, ""), isSpot);
+                raw = getInitialSnapshot(mSymbol.replace(FUT_SIGN, ""), isSpot);
                 snapshot = mapper.readValue(raw, DepthUpdate.class);
                 lastUpdateId = snapshot.getLastUpdateId();
             } while (lastUpdateId < U);
 
-            analyzeData(snapshot);
+            analyzeData(snapshot, true);
             isReSync = false;
             isInitialEvent = true;
 
@@ -158,37 +160,30 @@ public class OrderBook {
         }
     }
 
-    private void analyzeData(DepthUpdate depthUpdate) {
-        List<PriceLevel> asks = depthUpdate.getAsks();
-        List<PriceLevel> bids = depthUpdate.getBids();
-        analyze(depthUpdate, asks, bids);
-    }
-
-    private void analyze(DepthUpdate depthUpdate, List<PriceLevel> asks, List<PriceLevel> bids) {
-        long timestamp = getTimeStamp(depthUpdate);
-        traverseArray(asks, timestamp, true);
-        traverseArray(bids, timestamp, false);
-    }
-
-    private long getTimeStamp(DepthUpdate depthUpdate) {
-        long e = depthUpdate.getEventTime();
-        return e == 0 ? System.currentTimeMillis() : e;
-    }
-
-    private void traverseArray(List<PriceLevel> array, long timestamp, boolean isAsk) {
-        for (PriceLevel priceLevel : array) {
-            double price = parseDouble(priceLevel.price());
-            double quantity = parseDouble(priceLevel.quantity());
-            double distance = getDistance(price);
-            if (distance <= MAX_INCLINE) {
-                tradeList.addTrade(price, quantity, distance, isAsk, timestamp);
+    private void analyzeData(DepthUpdate depthUpdate, boolean initialSnapshot) {
+        generalTradeList.process(depthUpdate.getBids(), depthUpdate.getAsks(), initialSnapshot);
+        tls.values().forEach(tl -> tl.process(
+                generalTradeList.getBids(),
+                generalTradeList.getAsks(),
+                generalTradeList.getBidsTimeMap(),
+                generalTradeList.getAsksTimeMap(),
+                generalTradeList.getMarketPrice())
+        );
+        tls.values().forEach(tl -> {
+            if (tl.getHighestLevel() >= 1) {
+                var tradeListDTO = new TradeListDTO(mSymbol, tl.getBids(), tl.getAsks());
+                sessionManager.processTradeEvent(tl.getSettings().getSettingsHash(), mSymbol, tradeListDTO);
+            } else {
+                sessionManager.deleteTradeEvent(tl.getSettings().getSettingsHash(), mSymbol);
             }
-        }
+        });
     }
 
-    private double getDistance(double price) {
-        double marketPrice = TickerService.getPrice(marketSymbol);
-        double distance = abs((price - marketPrice) / marketPrice * 100);
-        return round(distance * 100.0) / 100.0;
+    public void addNewTL(Settings settings) {
+        tls.put(settings, new TradeList(settings));
+    }
+
+    public void removeTL(Settings settings) {
+        tls.remove(settings);
     }
 }

@@ -1,8 +1,8 @@
 package dev.abu.screener_backend.analysis;
 
-import java.util.Set;
+import java.util.Collection;
 
-public record TradeListDTO(String s, Set<Trade> b, Set<Trade> a) {
+public record TradeListDTO(String s, Collection<Trade> b, Collection<Trade> a) {
     @Override
     public boolean equals(Object obj) {
         if (this == obj) return true;

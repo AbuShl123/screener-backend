@@ -14,19 +14,15 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 @RequiredArgsConstructor
 public class WSDepthHandler extends TextWebSocketHandler {
 
-    private final SessionPool sessionPool;
+    private final SessionManager sessionManager;
 
     @Override
     public synchronized void afterConnectionEstablished(@NonNull WebSocketSession session) {
-        sessionPool.addSession(session);
+        sessionManager.addSession(session);
     }
 
     @Override
-    public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {}
+    public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
 
-    @Scheduled(fixedDelay = 500L)
-    public void sendUpdates() {
-        sessionPool.removeClosedSessions();
-        sessionPool.sendData();
     }
 }
