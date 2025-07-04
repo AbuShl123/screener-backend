@@ -5,6 +5,7 @@ import dev.abu.screener_backend.analysis.OBMessageHandler;
 import dev.abu.screener_backend.binance.OBService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
+import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -16,7 +17,6 @@ public class WSDepthHandler extends BinaryWebSocketHandler {
     private final String name;
     private final WSDepthClient wsDepthClient;
     private final OBMessageHandler messageHandler;
-    private final ObjectMapper mapper;
 
     public WSDepthHandler(
             String name,
@@ -27,15 +27,13 @@ public class WSDepthHandler extends BinaryWebSocketHandler {
     ) {
         this.name = name;
         this.wsDepthClient = wsDepthClient;
-        this.messageHandler = new OBMessageHandler(isSpot, obService);
-        this.mapper = mapper;
+        this.messageHandler = new OBMessageHandler(isSpot, obService, mapper);
     }
 
     @Override
     protected void handleTextMessage(@NonNull WebSocketSession session, @NonNull TextMessage message) {
         try {
-            DepthUpdate update = mapper.readValue(message.asBytes(), DepthUpdate.class);
-            messageHandler.take(update);
+            messageHandler.take(message.asBytes());
         } catch (Exception e) {
             log.error("Failed to deserialize depth event: {}", e.getMessage());
         }

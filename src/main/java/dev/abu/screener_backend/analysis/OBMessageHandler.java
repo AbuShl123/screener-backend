@@ -1,15 +1,18 @@
 package dev.abu.screener_backend.analysis;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.abu.screener_backend.binance.OBService;
 import dev.abu.screener_backend.binance.depth.DepthUpdate;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import static dev.abu.screener_backend.analysis.AsyncOBScheduler.getNumOfScheduledTasks;
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
 @Slf4j
@@ -28,31 +31,33 @@ public class OBMessageHandler {
     private static long lastCountUpdate = System.currentTimeMillis();
     private static int totalEventCount = 0;
 
-    private final LinkedBlockingQueue<DepthUpdate> queue;
+    private final LinkedBlockingQueue<byte[]> queue;
     private final Queue<DepthUpdate> internalQueue;
     private final boolean isSpot;
     private final OBService obService;
+    private final ObjectMapper mapper;
 
-    public OBMessageHandler(boolean isSpot, OBService obService) {
+    public OBMessageHandler(boolean isSpot, OBService obService, ObjectMapper mapper) {
         this.queue = new LinkedBlockingQueue<>(QUEUE_CAPACITY);
         this.internalQueue = new ArrayDeque<>(QUEUE_CAPACITY);
         this.isSpot = isSpot;
         this.obService = obService;
+        this.mapper = mapper;
         ScheduledExecutorService execService = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r);
             t.setName((isSpot ? "s" : "f") + "-msg-processor");
             return t;
         });
-        execService.scheduleAtFixedRate(this::processor, 1000L, 1000L, TimeUnit.MILLISECONDS);
+        execService.scheduleAtFixedRate(this::processor, 100L, 100L, TimeUnit.MILLISECONDS);
     }
 
     /**
      * Producer method that is called at a rate of max 864 messages per second.
      *
-     * @param depthUpdate POJO object representing a deserialized depth update from a websocket.
+     * @param binaryMessage binary message from a websocket.
      */
-    public void take(DepthUpdate depthUpdate) {
-        boolean success = queue.offer(depthUpdate);
+    public void take(byte[] binaryMessage) {
+        boolean success = queue.offer(binaryMessage);
         if (!success) {
             log.warn("isSpot={} queue is full!", isSpot);
             queue.clear();
@@ -63,11 +68,19 @@ public class OBMessageHandler {
      * Consumer function called every second by a scheduled thread.
      */
     private void processor() {
-        List<DepthUpdate> batch = new ArrayList<>();
+        List<byte[]> batch = new ArrayList<>();
         queue.drainTo(batch);
-        if (!batch.isEmpty()) {
-            internalQueue.addAll(batch);
-        }
+        if (batch.isEmpty()) return;
+
+        batch.forEach(bytes -> {
+            try {
+                DepthUpdate update = mapper.readValue(bytes, DepthUpdate.class);
+                internalQueue.add(update);
+            } catch (IOException e) {
+                log.error("Couldn't serialize websocket event into DepthUpdate", e);
+            }
+        });
+
         processInternalQueue();
     }
 
@@ -90,7 +103,6 @@ public class OBMessageHandler {
 
     /**
      * Method called by a consumer thread from a processor() -> processInternalQueue() method.
-     *
      * @param depthUpdate   POJO object representing a deserialized depth update from a websocket
      * @param ineligibleSet a set of symbols that should be preserved for a next processing.
      * @return true if this depthUpdate event should be removed, false otherwise.
@@ -114,10 +126,13 @@ public class OBMessageHandler {
 
             if (orderBook == null) {
                 return true;
+
             } else if (orderBook.isTaskScheduled()) {
                 ineligibleSet.add(symbol);
-            } else if (orderBook.isScheduleNeeded() && obService.getNumOfScheduledTasks(isSpot) > SCHEDULE_THRESHOLD) {
+
+            } else if (orderBook.isScheduleNeeded() && getNumOfScheduledTasks(isSpot) > SCHEDULE_THRESHOLD) {
                 return true;
+
             } else {
                 orderBook.process(depthUpdate);
                 analyzeEventCount();
@@ -132,7 +147,7 @@ public class OBMessageHandler {
     /**
      * Event count analyzer method - very crucial to understand that the number
      * of events processed by the application is at the healthy level.
-     * Futures and Spot push updates at a rate of ~1200 messages per second (worst scenario),
+     * Futures and Spot websockets push updates at a rate of ~1200 messages per second (worst scenario, usually it's smaller than that),
      * therefore the usual number of processed events should be ~72000 per minute.
      * In production, it's usually 60K events per minute (as of June 14, 2025).
      */

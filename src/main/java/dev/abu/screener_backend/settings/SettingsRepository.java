@@ -20,9 +20,10 @@ public interface SettingsRepository extends JpaRepository<Settings, Long> {
     @Query("SELECT s FROM Settings s WHERE s.settingsHash LIKE 'default%'")
     List<Settings> findAllDefaultSettings();
 
-    @Query("SELECT s FROM Settings s WHERE s.settingsHash = 'default_' + :mSymbol")
+    @Query("SELECT s FROM Settings s WHERE s.settingsHash = CONCAT('default_', :mSymbol)")
     Optional<Settings> findDefaultSettings(@Param("mSymbol") String mSymbol);
 
     @Query("SELECT s FROM Settings s WHERE s.mSymbol = 'all'")
-    Optional<Settings> findDefaultSettings();
+    Optional<Settings> findDefaultSettingsForAllSymbols();
+
 }

@@ -103,15 +103,24 @@ public class SettingsService {
         Optional<UserSettings> userSetOpt = userSettingsRepository.findByAppUserAndSettings_mSymbol(appUser, mSymbol);
         if (userSetOpt.isPresent()) {
             UserSettings userSettings = userSetOpt.get();
-            Settings settings = userSettings.getSettings();
-            userSettingsRepository.delete(userSettings);
-            long count = userSettingsRepository.countBySettings(settings);
-            if (count == 0) {
-                settingsRepository.delete(settings);
-            }
+            deleteUserSettings(userSettings);
             return true;
         }
         return false;
+    }
+
+    @Transactional
+    public void resetSettings(AppUser appUser) {
+        List<UserSettings> allUserSettings = userSettingsRepository.findAllByAppUser(appUser);
+        for (UserSettings userSettings : allUserSettings) {
+            deleteUserSettings(userSettings);
+        }
+
+        List<Settings> allDefaultSettings = settingsRepository.findAllDefaultSettings();
+        for (Settings defaultSettings : allDefaultSettings) {
+            UserSettings userSettings = new UserSettings(appUser, defaultSettings);
+            userSettingsRepository.save(userSettings);
+        }
     }
 
     public UserSettingsResponse getAllSettings(AppUser appUser) {
@@ -129,6 +138,15 @@ public class SettingsService {
         if (userSettings == null) return Optional.empty();
         var settings = new SettingsResponse(userSettings.getSettings());
         return Optional.of(new UserSettingsResponse(appUser.getEmail(), List.of(settings)));
+    }
+
+    private void deleteUserSettings(UserSettings userSettings) {
+        userSettingsRepository.delete(userSettings);
+        Settings settings = userSettings.getSettings();
+        long count = userSettingsRepository.countBySettings(settings);
+        if (count == 0) {
+            settingsRepository.delete(settings);
+        }
     }
 
     private String computeSettingHash(Map<Double, Integer> settingsMap, String mSymbol, SettingsType type) {

@@ -41,7 +41,7 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(authorizeRequests ->
                         authorizeRequests
-                                .requestMatchers("api/v1/auth/**", "api/v1/subscribe/**").permitAll()
+                                .requestMatchers("api/v1/auth/**", "api/v1/subscribe/plans").permitAll()
                                 .anyRequest()
                                 .authenticated()
                 )

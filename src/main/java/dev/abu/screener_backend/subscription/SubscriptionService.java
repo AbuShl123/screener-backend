@@ -1,7 +1,6 @@
 package dev.abu.screener_backend.subscription;
 
 import dev.abu.screener_backend.appuser.AppUser;
-import dev.abu.screener_backend.appuser.AppUserRepository;
 import dev.abu.screener_backend.subscription.plan.SubscriptionPlan;
 import dev.abu.screener_backend.subscription.plan.SubscriptionPlanDuration;
 import dev.abu.screener_backend.subscription.plan.SubscriptionPlanRepository;
@@ -22,8 +21,7 @@ import static dev.abu.screener_backend.utils.RequestUtilities.*;
 public class SubscriptionService {
 
     private final SubscriptionRepository subscriptionRepository;
-    private final SubscriptionPlanRepository planRepository;
-    private final AppUserRepository appUserRepository;
+    private final SubscriptionPlanRepository subscriptionPlanRepository;
 
     @Scheduled(fixedDelay = 60 * 60 * 1000)
     public void deactivateInactiveSubscriptions() {
@@ -31,11 +29,7 @@ public class SubscriptionService {
     }
 
     @Transactional
-    public ResponseEntity<SubscriptionResponse> subscribe(String email, long subscriptionPlanId) {
-        // find user, if it doesn't exist then throw error
-        AppUser user = appUserRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalStateException(USER_NOT_FOUND));
-
+    public ResponseEntity<SubscriptionResponse> subscribe(AppUser user, long subscriptionPlanId) {
         // check if user already has active subscription
         boolean isSubscribedAlready = subscriptionRepository.findByAppUser(user).isPresent();
         if (isSubscribedAlready) {
@@ -43,7 +37,7 @@ public class SubscriptionService {
         }
 
         // find subscription plan, if it doesn't exist then throw error
-        SubscriptionPlan subscriptionPlan = planRepository.findById(subscriptionPlanId)
+        SubscriptionPlan subscriptionPlan = subscriptionPlanRepository.findById(subscriptionPlanId)
                 .orElseThrow(() -> new IllegalStateException(SUBSCRIPTION_PLAN_NOT_FOUND));
 
         // create subscription
@@ -70,18 +64,14 @@ public class SubscriptionService {
     }
 
     @Transactional
-    public void deleteSubscription(final String email) {
-        // find user, if it doesn't exist then throw error
-        AppUser user = appUserRepository.findByEmail(email)
-                .orElseThrow(() -> new IllegalStateException(USER_NOT_FOUND));
+    public void deleteSubscription(final AppUser user) {
         final long userId = user.getId();
         subscriptionRepository.findByAppUser_Id(userId).orElseThrow(() -> new IllegalStateException(USER_NOT_SUBSCRIBED));
         subscriptionRepository.deleteByAppUser_Id(userId);
     }
 
     @Transactional
-    public SubscriptionResponse renewSubscription(final String email) {
-        AppUser user = appUserRepository.findByEmail(email).orElseThrow(() -> new IllegalStateException(USER_NOT_FOUND));
+    public SubscriptionResponse renewSubscription(final AppUser user) {
         long userId = user.getId();
         Subscription subscription = subscriptionRepository.findByAppUser_Id(userId).orElseThrow(() -> new IllegalStateException(USER_NOT_SUBSCRIBED));
         SubscriptionPlan plan = subscription.getSubscriptionPlan();
@@ -97,8 +87,7 @@ public class SubscriptionService {
         return generateResponse(id, plan, RENEWED_SUCCESSFULLY, SubscriptionStatus.ACTIVE, subscription.getCreatedAt(), newExpiryDate);
     }
 
-    public SubscriptionResponse getUserSubscription(final String email) {
-        AppUser user = appUserRepository.findByEmail(email).orElseThrow(() -> new IllegalStateException(USER_NOT_FOUND));
+    public SubscriptionResponse getUserSubscription(final AppUser user) {
         final long userId = user.getId();
         Subscription subscription = subscriptionRepository.findByAppUser_Id(userId).orElse(null);
 

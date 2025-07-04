@@ -27,15 +27,14 @@ import static dev.abu.screener_backend.binance.OBService.printReSyncMap;
 @RequiredArgsConstructor
 public class BinanceService {
 
-    private final ObjectMapper mapper;
     private final TickerService tickerService;
     private final OBService obService;
-//    private final WSSpotDepthClient spotDepthClient;
+    private final WSSpotDepthClient spotDepthClient;
     private final WSFutDepthClient futDepthClient;
 
     @PostConstruct
     public void setup() {
-//        spotDepthClient.startWebSocket();
+        spotDepthClient.startWebSocket();
         futDepthClient.startWebSocket();
         syncEveryMinute();
     }
@@ -46,22 +45,17 @@ public class BinanceService {
         tickerService.syncTickerPrices();
     }
 
-    @Scheduled(initialDelay = 10 * 60_000, fixedDelay = 10 * 60_000)
-    public void truncateOrderBooks() {
-        obService.truncateOrderBooks();
-    }
-
     @Scheduled(fixedDelay = 15 * 60_000)
     public void tickersUpdate() {
         obService.truncateOrderBooks();
         tickerService.updateTickers();
-//        spotDepthClient.listenToSymbols(tickerService.getSpotSymbols());
-        futDepthClient.listenToSymbols(Set.of("wifusdt", "dogeusdt", "bchusdt", "btcusdt"));
+        spotDepthClient.listenToSymbols(tickerService.getSpotSymbols());
+        futDepthClient.listenToSymbols(tickerService.getFutSymbols());
     }
 
     @Scheduled(initialDelay = 60_000, fixedDelay = 180_000)
     public void sendPongMessage() {
-//        spotDepthClient.sendPongMessage();
+        spotDepthClient.sendPongMessage();
         futDepthClient.sendPongMessage();
     }
 
@@ -92,9 +86,7 @@ public class BinanceService {
     }
 
     public JsonNode topOrderBook(String mSymbol) {
-        var tl = obService.getOrderBook(mSymbol).getTls().get(0);
-        TradeListDTO dto = new TradeListDTO(mSymbol, tl.getBids(), tl.getAsks());
-        return mapper.valueToTree(dto);
+        return null;
     }
 
     private void writeSide(JsonGenerator gen, String fieldName, Map<Double, Double> side) throws Exception {

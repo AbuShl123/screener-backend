@@ -22,7 +22,7 @@ public class UserController {
     @GetMapping
     public ResponseEntity<UserResponse> getCurrentUser(@AuthenticationPrincipal UserDetails userDetails) {
         var user = userService.getUserByEmail(userDetails.getUsername());
-        var subscription = subscriptionService.getUserSubscription(user.getEmail());
+        var subscription = subscriptionService.getUserSubscription(user);
         var userResponse = UserResponse.create(user, subscription);
         return ResponseEntity.ok(userResponse);
     }

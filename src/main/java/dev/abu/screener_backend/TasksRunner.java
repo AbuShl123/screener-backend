@@ -1,8 +1,7 @@
 package dev.abu.screener_backend;
 
-import dev.abu.screener_backend.settings.Settings;
-import dev.abu.screener_backend.settings.SettingsRepository;
-import dev.abu.screener_backend.settings.SettingsType;
+import dev.abu.screener_backend.appuser.AppUserRepository;
+import dev.abu.screener_backend.settings.*;
 import dev.abu.screener_backend.subscription.plan.SubscriptionPlan;
 import dev.abu.screener_backend.subscription.plan.SubscriptionPlanDuration;
 import dev.abu.screener_backend.subscription.plan.SubscriptionPlanRepository;
@@ -22,9 +21,13 @@ public class TasksRunner implements CommandLineRunner {
 
     private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final SettingsRepository settingsRepository;
+    private final AppUserRepository appUserRepository;
+    private final UserSettingsRepository userSettingsRepository;
+    private final SettingsService settingsService;
 
     @Override
     public void run(String... args) {
+
     }
 
     private void addSubscriptionPlans() {

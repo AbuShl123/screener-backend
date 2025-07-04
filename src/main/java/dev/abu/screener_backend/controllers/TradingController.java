@@ -27,7 +27,7 @@ import java.util.Map;
 @RestController
 @SubscribedOnly
 @RequestMapping(path = "api/v1")
-public class ScreenerController {
+public class TradingController {
 
     private final TickerService tickerService;
     private final BitgetOpenInterestService oiService;
@@ -77,7 +77,17 @@ public class ScreenerController {
         settingsService.saveSettings(appUser, settingsRequest);
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(Map.of("success", "new settings for " + settingsRequest.getMSymbol() + " are saved."));
+                .body(Map.of("success", "New settings for " + settingsRequest.getMSymbol() + " are saved."));
+    }
+
+        @PostMapping("/settings/reset")
+    public ResponseEntity<Map<String, String>> resetSettings(
+            @AuthenticationPrincipal AppUser appUser
+    ) {
+        settingsService.resetSettings(appUser);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("success", "Settings are reset for user " + appUser.getEmail()));
     }
 
     @DeleteMapping("/settings/{mSymbol}")

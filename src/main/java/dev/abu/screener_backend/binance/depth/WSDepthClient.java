@@ -5,6 +5,7 @@ import dev.abu.screener_backend.binance.OBService;
 import jakarta.websocket.ContainerProvider;
 import jakarta.websocket.WebSocketContainer;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.PongMessage;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -154,7 +155,7 @@ public abstract class WSDepthClient {
     public boolean subscribe(Collection<String> params, String id) {
         try {
             var request = new WSSubscriptionRequest("SUBSCRIBE", params, id);
-            String message = new ObjectMapper().writeValueAsString(request);
+            byte[] message = new ObjectMapper().writeValueAsBytes(request);
             return sendMessage(message);
         } catch (Exception e) {
             log.warn("{} couldn't subscribe to streams {}", name, e.getMessage());
@@ -165,7 +166,7 @@ public abstract class WSDepthClient {
     public boolean unsubscribe(Collection<String> params, String id) {
         try {
             var request = new WSSubscriptionRequest("UNSUBSCRIBE", params, id);
-            String message = new ObjectMapper().writeValueAsString(request);
+            byte[] message = new ObjectMapper().writeValueAsBytes(request);
             return sendMessage(message);
         } catch (Exception e) {
             log.warn("{} couldn't unsubscribe from streams {}", name, e.getMessage());
@@ -173,7 +174,7 @@ public abstract class WSDepthClient {
         }
     }
 
-    public boolean sendMessage(String message) {
+    public boolean sendMessage(byte[] message) {
         if (session != null && session.isOpen()) {
             try {
                 session.sendMessage(new TextMessage(message));

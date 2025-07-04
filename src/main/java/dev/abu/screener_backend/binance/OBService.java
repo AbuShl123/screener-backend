@@ -5,17 +5,17 @@ import dev.abu.screener_backend.analysis.OrderBook;
 import dev.abu.screener_backend.analysis.TradeList;
 import dev.abu.screener_backend.settings.Settings;
 import dev.abu.screener_backend.settings.SettingsRepository;
-import dev.abu.screener_backend.websockets.SessionManager;
+import dev.abu.screener_backend.websockets.EventDistributor;
+import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
@@ -25,51 +25,35 @@ import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 public class OBService {
     private static final Map<String, Set<String>> reSyncCountMap = new ConcurrentHashMap<>();
 
-    private static final ThreadPoolExecutor spotExecService = new ThreadPoolExecutor(
-            1, 1, 0L, TimeUnit.MILLISECONDS,
-            new LinkedBlockingQueue<>(),
-            r -> {
-                Thread thread = new Thread(r);
-                thread.setName("spot-async-scheduler");
-                return thread;
-            });
+    @Getter
+    private final Map<String, OrderBook> orderBooks = new ConcurrentHashMap<>();
+    private final Map<OrderBook, Set<Settings>> settingsMap = new ConcurrentHashMap<>();
+    private final Map<Settings, TradeList> tradeLists = new ConcurrentHashMap<>();
+    private final Map<Settings, Integer> settingsCount = new ConcurrentHashMap<>();
 
-    private static final ThreadPoolExecutor futExecService = new ThreadPoolExecutor(
-            1, 1, 0L, TimeUnit.MILLISECONDS,
-            new LinkedBlockingQueue<>(),
-            r -> {
-                Thread thread = new Thread(r);
-                thread.setName("fut-async-scheduler");
-                return thread;
-            });
-
-    @Getter private final Map<String, OrderBook> orderBooks = new ConcurrentHashMap<>();
     private final ObjectMapper mapper;
+    private final EventDistributor eventDistributor;
     private final SettingsRepository settingsRepository;
-    private final SessionManager sessionManager;
+    private Settings allSymbolDefSettings;
 
-    // can be accessed by ~900 order book objects at the same time
+    @PostConstruct
+    public void init() {
+        allSymbolDefSettings = settingsRepository.findDefaultSettingsForAllSymbols()
+                .orElseThrow(() -> new RuntimeException("No default settings for all symbols found!!"));
+    }
+
     public static void incrementReSyncCount(String websocketName, String symbol) {
         reSyncCountMap.get(websocketName).add(symbol);
     }
 
-    // can be accessed by ~900 order book objects at the same time
     public static void decrementReSyncCount(String websocketName, String symbol) {
         reSyncCountMap.get(websocketName).remove(symbol);
     }
 
-    // can be accessed by ~900 order book objects at the same time
-    public static void scheduleTask(Runnable task, boolean isSpot) {
-        if (isSpot) spotExecService.submit(task);
-        else futExecService.submit(task);
-    }
-
-    // accessed by spot & futures websocket only once and sequentially
     public static void prepareReSyncMap(String websocketName) {
         reSyncCountMap.computeIfAbsent(websocketName, k -> ConcurrentHashMap.newKeySet());
     }
 
-    // accessed by binance service every minute
     public static void printReSyncMap() {
         StringBuilder sb = new StringBuilder("re-sync map: {");
         for (var entry : reSyncCountMap.entrySet()) {
@@ -80,43 +64,19 @@ public class OBService {
         log.info(sb.toString());
     }
 
-    // can be accessed by 2 message handlers at the same time (2 objects)
     public OrderBook getOrderBook(String marketSymbol) {
         return orderBooks.get(marketSymbol);
     }
 
-    // can be accessed by 2 message handlers at the same time (2 objects)
-    public long getNumOfScheduledTasks(boolean isSpot) {
-        if (isSpot) return spotExecService.getQueue().size();
-        return futExecService.getQueue().size();
-    }
-
-    // can be accessed by spot & futures websocket at the same time (2 objects)
     public void prepareOrderBooks(Collection<String> symbols, boolean isSpot, String wsName) {
-        Settings defaultSettings = getDefaultSettings();
         for (String symbol : symbols) {
             String mSymbol = isSpot ? symbol : symbol + FUT_SIGN;
-            Settings settings = findDefaultSettings(mSymbol).orElse(defaultSettings);
-            TradeList tl = new TradeList(settings);
-            var orderbook = new OrderBook(mSymbol, isSpot, wsName, mapper, sessionManager, tl);
+            var orderbook = new OrderBook(mSymbol, isSpot, wsName, mapper, eventDistributor);
             orderBooks.putIfAbsent(mSymbol, orderbook);
+            addDefaultTL(orderbook);
         }
     }
 
-    private Settings getDefaultSettings() {
-        Optional<Settings> defaultSettingsOpt = settingsRepository.findDefaultSettings();
-        if (defaultSettingsOpt.isEmpty()) {
-            log.warn("Couldn't find default settings!!!");
-            throw new RuntimeException("Couldn't find default settings!!!");
-        }
-        return defaultSettingsOpt.get();
-    }
-
-    private Optional<Settings> findDefaultSettings(String mSymbol) {
-        return settingsRepository.findDefaultSettings(mSymbol);
-    }
-
-    // can be accessed by spot & futures websocket at the same time (2 objects)
     public void dropOrderBooks(Collection<String> symbols, boolean isSpot) {
         for (String symbol : symbols) {
             String marketSymbol = isSpot ? symbol : symbol + FUT_SIGN;
@@ -124,12 +84,63 @@ public class OBService {
         }
     }
 
-    public void addNewTL(Settings settings) {
-        getOrderBook(settings.getMSymbol()).addNewTL(settings);
+    private void addDefaultTL(OrderBook orderBook) {
+        settingsMap.computeIfAbsent(orderBook, k -> ConcurrentHashMap.newKeySet());
+        settingsRepository.findDefaultSettings(orderBook.getMSymbol())
+                .ifPresentOrElse(
+                        (s) -> addTL(orderBook, s),
+                        () -> addTL(orderBook, allSymbolDefSettings)
+                );
     }
 
-    public void removeTL(Settings settings) {
-        getOrderBook(settings.getMSymbol()).removeTL(settings);
+    public void addUserTL(Collection<Settings> userSettings) {
+        for (Settings settings : userSettings) {
+            if (settings.getSettingsHash().contains("default")) continue;
+
+            String mSymbol = settings.getMSymbol();
+            OrderBook ob = orderBooks.get(mSymbol);
+
+            if (ob == null) {
+                log.warn("Order book not found for mSymbol: {}", mSymbol);
+                continue;
+            }
+
+            if (!settingsMap.containsKey(ob)) {
+                log.warn("{} order book has no DTL", mSymbol);
+                continue;
+            }
+
+            if (settingsMap.get(ob).contains(settings)) {
+                settingsCount.put(settings, settingsCount.get(settings) + 1);
+                continue;
+            }
+
+            addTL(ob, settings);
+        }
+    }
+
+    public void deleteUserTL(Collection<Settings> userSettings) {
+        for (Settings settings : userSettings) {
+            if (settings.getSettingsHash().contains("default")) continue;
+            if (!settingsCount.containsKey(settings)) continue;
+            settingsCount.put(settings, settingsCount.get(settings) - 1);
+            if (settingsCount.get(settings) == 0) {
+                TradeList tl = tradeLists.remove(settings);
+                OrderBook ob =  orderBooks.get(settings.getMSymbol());
+
+                settingsMap.get(ob).remove(settings);
+                settingsMap.remove(ob);
+                ob.removeTL(tl);
+            }
+        }
+    }
+
+    private void addTL(OrderBook ob, Settings settings) {
+        TradeList tl = new TradeList(settings, ob.getMSymbol());
+        settingsMap.get(ob).add(settings);
+        tradeLists.put(settings, tl);
+        settingsCount.put(settings, 1);
+        ob.addTL(tl);
     }
 
     public void truncateOrderBooks() {

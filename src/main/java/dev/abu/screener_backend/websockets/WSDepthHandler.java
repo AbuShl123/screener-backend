@@ -17,12 +17,12 @@ public class WSDepthHandler extends TextWebSocketHandler {
     private final SessionManager sessionManager;
 
     @Override
-    public synchronized void afterConnectionEstablished(@NonNull WebSocketSession session) {
+    public void afterConnectionEstablished(@NonNull WebSocketSession session) {
         sessionManager.addSession(session);
     }
 
     @Override
     public void afterConnectionClosed(@NonNull WebSocketSession session, @NonNull CloseStatus status) {
-
+        sessionManager.removeSession(session);
     }
 }

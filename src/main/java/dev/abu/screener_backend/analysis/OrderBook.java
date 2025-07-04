@@ -2,15 +2,15 @@ package dev.abu.screener_backend.analysis;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.abu.screener_backend.binance.depth.DepthUpdate;
-import dev.abu.screener_backend.settings.Settings;
-import dev.abu.screener_backend.websockets.SessionManager;
+import dev.abu.screener_backend.websockets.EventDistributor;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.HashSet;
+import java.util.Set;
 
-import static dev.abu.screener_backend.binance.OBService.*;
+import static dev.abu.screener_backend.binance.OBService.decrementReSyncCount;
+import static dev.abu.screener_backend.binance.OBService.incrementReSyncCount;
 import static dev.abu.screener_backend.binance.depth.DepthClient.getInitialSnapshot;
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
@@ -18,15 +18,15 @@ import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 public class OrderBook {
 
     private final ObjectMapper mapper;
+    private final EventDistributor eventDistributor;
     private final String websocketName;
     private final boolean isSpot;
-    private final SessionManager sessionManager;
     private boolean isInitialEvent = false;
 
     @Getter
     private final GeneralTradeList generalTradeList;
     @Getter
-    private final Map<Settings, TradeList> tls;
+    private final Set<TradeList> tls;
     @Getter
     private final String mSymbol;
     @Getter
@@ -40,17 +40,15 @@ public class OrderBook {
             boolean isSpot,
             String websocketName,
             ObjectMapper mapper,
-            SessionManager sessionManager,
-            TradeList defaultTl
+            EventDistributor eventDistributor
     ) {
         this.mSymbol = mSymbol;
-        this.sessionManager = sessionManager;
-        this.generalTradeList = new GeneralTradeList();
-        this.tls = new ConcurrentHashMap<>();
         this.isSpot = isSpot;
         this.websocketName = websocketName;
         this.mapper = mapper;
-        tls.put(defaultTl.getSettings(), defaultTl);
+        this.eventDistributor = eventDistributor;
+        this.generalTradeList = new GeneralTradeList();
+        this.tls = new HashSet<>();
     }
 
     public boolean isScheduleNeeded() {
@@ -75,7 +73,7 @@ public class OrderBook {
 
     private void processEventConcurrently(DepthUpdate depthUpdate) {
         isTaskScheduled = true;
-        scheduleTask(() -> {
+        AsyncOBScheduler.scheduleTask(() -> {
             startProcessing(depthUpdate);
             isTaskScheduled = false;
         }, isSpot);
@@ -160,30 +158,21 @@ public class OrderBook {
         }
     }
 
-    private void analyzeData(DepthUpdate depthUpdate, boolean initialSnapshot) {
+    private synchronized void analyzeData(DepthUpdate depthUpdate, boolean initialSnapshot) {
         generalTradeList.process(depthUpdate.getBids(), depthUpdate.getAsks(), initialSnapshot);
-        tls.values().forEach(tl -> tl.process(
-                generalTradeList.getBids(),
-                generalTradeList.getAsks(),
-                generalTradeList.getBidsTimeMap(),
-                generalTradeList.getAsksTimeMap(),
-                generalTradeList.getMarketPrice())
-        );
-        tls.values().forEach(tl -> {
-            if (tl.getHighestLevel() >= 1) {
-                var tradeListDTO = new TradeListDTO(mSymbol, tl.getBids(), tl.getAsks());
-                sessionManager.processTradeEvent(tl.getSettings().getSettingsHash(), mSymbol, tradeListDTO);
-            } else {
-                sessionManager.deleteTradeEvent(tl.getSettings().getSettingsHash(), mSymbol);
+        tls.forEach(tl -> {
+            tl.process(generalTradeList);
+            if (tl.getMaxLevel() >= 1 || tl.getPrevMaxLevel() >= 1) {
+                eventDistributor.distribute(tl.getSettings().getSettingsHash(), tl.getMaxLevel(), tl.toDTO());
             }
         });
     }
 
-    public void addNewTL(Settings settings) {
-        tls.put(settings, new TradeList(settings));
+    public synchronized void addTL(TradeList tradeList) {
+        tls.add(tradeList);
     }
 
-    public void removeTL(Settings settings) {
-        tls.remove(settings);
+    public synchronized void removeTL(TradeList tradeList) {
+        tls.remove(tradeList);
     }
 }

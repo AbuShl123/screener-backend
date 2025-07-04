@@ -5,30 +5,35 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
-import java.util.concurrent.ThreadLocalRandom;
 
-import static dev.abu.screener_backend.settings.SettingsType.COINS;
 import static dev.abu.screener_backend.settings.SettingsType.DOLLAR;
 import static java.lang.Math.*;
 
 @Slf4j
 public class TradeList {
 
-    private final LinkedList<Trade> availableObjects;
-    @Getter private final PriorityQueue<Trade> bids;
-    @Getter private final PriorityQueue<Trade> asks;
-    @Getter private final Settings settings;
-    @Getter private int highestLevel;
+    private static final int MAX_TRADES = 5;
 
-    public TradeList(Settings settings) {
+    @Getter private final String mSymbol;
+    @Getter private final Settings settings;
+    @Getter private int maxLevel;
+    @Getter private int prevMaxLevel;
+
+    private final LinkedList<Trade> availableObjects;
+    private final PriorityQueue<Trade> bids;
+    private final PriorityQueue<Trade> asks;
+
+
+    public TradeList(Settings settings, String mSymbol) {
         var comparator = Comparator
                 .comparingInt(Trade::getLevel)
                 .thenComparingDouble(Trade::getQuantity)
                 .thenComparingDouble(Trade::getPrice);
-        bids = new PriorityQueue<>(comparator);
-        asks = new PriorityQueue<>(comparator);
-        availableObjects = new LinkedList<>();
+        this.bids = new PriorityQueue<>(comparator);
+        this.asks = new PriorityQueue<>(comparator);
+        this.availableObjects = new LinkedList<>();
         this.settings = settings;
+        this.mSymbol = mSymbol;
         init();
     }
 
@@ -38,24 +43,26 @@ public class TradeList {
         }
     }
 
-    public void process(
-            Map<Double, Double> bidsMap,
-            Map<Double, Double> asksMap,
-            Map<Double, Long> bidsTime,
-            Map<Double, Long> asksTime,
-            double marketPrice
-    ) {
-        highestLevel = 0;
+    public void process(GeneralTradeList gtl) {
+        analyzeNewData(gtl);
+    }
+
+    public TradeListDTO toDTO() {
+        return new TradeListDTO(mSymbol, bids, asks);
+    }
+
+    private void analyzeNewData(GeneralTradeList gtl) {
+        prevMaxLevel = maxLevel;
+        maxLevel = 0;
         availableObjects.addAll(bids);
         availableObjects.addAll(asks);
         bids.clear();
         asks.clear();
-
-        keep5LargestTrades(marketPrice, bidsMap, bidsTime, bids);
-        keep5LargestTrades(marketPrice, asksMap, asksTime, asks);
+        keepLargestTrades(gtl.getMarketPrice(), gtl.getBids(), gtl.getBidsTimeMap(), bids);
+        keepLargestTrades(gtl.getMarketPrice(), gtl.getAsks(), gtl.getAsksTimeMap(), asks);
     }
 
-    private void keep5LargestTrades(
+    private void keepLargestTrades(
             double marketPrice,
             Map<Double, Double> orders,
             Map<Double, Long> timeDetected,
@@ -71,20 +78,21 @@ public class TradeList {
 
             // if pq has 5 elements and the smallest element is greater than the current trade,
             // then there is no need to add it.
-            if (pq.size() == 5 && pq.peek().isGreaterThan(level, quantity, price)) {
+            if (pq.size() == MAX_TRADES && pq.peek().isGreaterThan(level, quantity, price)) {
                 continue;
             }
 
-            highestLevel = max(highestLevel, level);
+            maxLevel = max(maxLevel, level);
 
             // otherwise, if pq has 5 elements then remove the smallest element from the pq
-            if (pq.size() == 5) {
+            if (pq.size() == MAX_TRADES) {
                 availableObjects.addLast(pq.poll());
             }
 
             Trade trade = availableObjects.pollLast();
             if (trade == null) {
-                trade = new Trade(); // fallback
+                trade = new Trade(); // fallback, should never happen actually
+                log.warn("Trade pool exhausted, creating new Trade instance.");
             }
             trade.set(price, quantity, dist, level, time);
             pq.offer(trade);
@@ -99,7 +107,7 @@ public class TradeList {
         int i = 1;
         for (Map.Entry<Double, Integer> entry : settingsMap.entrySet()) {
             if (distance <= entry.getKey() && volume >= entry.getValue()) {
-               level = i;
+                level = i;
             }
             i++;
         }

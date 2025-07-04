@@ -1,11 +1,13 @@
 package dev.abu.screener_backend.controllers;
 
+import dev.abu.screener_backend.appuser.AppUser;
 import dev.abu.screener_backend.subscription.SubscriptionResponse;
 import dev.abu.screener_backend.subscription.SubscriptionService;
 import dev.abu.screener_backend.subscription.plan.SubscriptionPlan;
 import dev.abu.screener_backend.subscription.plan.SubscriptionPlanService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,38 +20,38 @@ public class SubscriptionController {
     private final SubscriptionService subscriptionService;
     private final SubscriptionPlanService subscriptionPlanService;
 
-    @PostMapping("/{subscriptionPlanId}/{email}")
+    @PostMapping("/{subscriptionPlanId}")
     public ResponseEntity<SubscriptionResponse> subscribe(
-            @PathVariable final long subscriptionPlanId,
-            @PathVariable final String email
+            @AuthenticationPrincipal AppUser appUser,
+            @PathVariable final long subscriptionPlanId
     ) {
-        return subscriptionService.subscribe(email, subscriptionPlanId);
+        return subscriptionService.subscribe(appUser, subscriptionPlanId);
     }
 
-    @GetMapping("/{email}")
-    public ResponseEntity<SubscriptionResponse> subscribe(
-            @PathVariable final String email
+    @GetMapping
+    public ResponseEntity<SubscriptionResponse> getSubscription(
+            @AuthenticationPrincipal AppUser appUser
     ) {
-        SubscriptionResponse subscriptionResponse = subscriptionService.getUserSubscription(email);
+        SubscriptionResponse subscriptionResponse = subscriptionService.getUserSubscription(appUser);
         if (subscriptionResponse == null) {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(subscriptionResponse);
     }
 
-    @PostMapping("/renew/{email}")
+    @PostMapping("/renew")
     public ResponseEntity<SubscriptionResponse> renew(
-            @PathVariable final String email
+            @AuthenticationPrincipal AppUser appUser
     ) {
-        var response = subscriptionService.renewSubscription(email);
+        var response = subscriptionService.renewSubscription(appUser);
         return ResponseEntity.ok(response);
     }
 
-    @DeleteMapping("/{email}")
+    @DeleteMapping()
     public ResponseEntity<Void> unsubscribe(
-            @PathVariable final String email
+            @AuthenticationPrincipal AppUser appUser
     ) {
-        subscriptionService.deleteSubscription(email);
+        subscriptionService.deleteSubscription(appUser);
         return ResponseEntity.noContent().build();
     }
 

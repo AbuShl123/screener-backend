@@ -9,6 +9,7 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @Entity
+@Table(name = "subscription_plan")
 public class SubscriptionPlan {
 
     @Id
