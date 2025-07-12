@@ -5,15 +5,18 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.Data;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 
 @Data
 public class SettingsRequestDTO {
     @JsonProperty("mSymbol")
     private String mSymbol;
 
+    @JsonProperty("audio")
+    private boolean audio;
+
     @JsonProperty("type")
     private SettingsType type;
 
-    @JsonDeserialize(using = SettingsEntriesDeserializer.class)
-    private LinkedHashMap<Double, Integer> entries;
+    private List<SettingsEntry> entries;
 }

@@ -14,6 +14,7 @@ import dev.abu.screener_backend.settings.UserSettingsResponse;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -46,12 +47,38 @@ public class TradingController {
                 .body(oiService.getHistoricalOI());
     }
 
+    @GetMapping("/kilnes/5m-volume/{mSymbol}")
+    public ResponseEntity<String> get5MVolumeData(
+            @PathVariable String mSymbol
+    ) {
+        try {
+            String jsonResponse = binanceService.get5MVolumeData(mSymbol);
+
+            if (jsonResponse == null) {
+                return ResponseEntity
+                        .status(HttpStatus.BAD_GATEWAY)
+                        .body("{\"error\": \"Failed to proxy depth data\"}");
+            }
+
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(jsonResponse);
+
+        } catch (Exception e) {
+            return ResponseEntity
+                    .status(HttpStatus.BAD_GATEWAY)
+                    .body("Failed to proxy depth data: " + e.getMessage());
+        }
+    }
+
     @GetMapping("/ticker-price-change")
     public ResponseEntity<List<ObjectNode>> getTickerPriceChange() {
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(tickerService.getHistory());
     }
+
+    // **************** ORDER BOOK ****************
 
     @GetMapping("/orderbook/{mSymbol}")
     public void geOrderBook(
@@ -69,6 +96,8 @@ public class TradingController {
         return ResponseEntity.ok(binanceService.topOrderBook(mSymbol));
     }
 
+    // **************** SETTINGS ****************
+
     @PostMapping("/settings")
     public ResponseEntity<Map<String, String>> addSettings(
             @AuthenticationPrincipal AppUser appUser,
@@ -77,17 +106,28 @@ public class TradingController {
         settingsService.saveSettings(appUser, settingsRequest);
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(Map.of("success", "New settings for " + settingsRequest.getMSymbol() + " are saved."));
+                .body(Map.of("success", "New settings are are saved."));
     }
 
-        @PostMapping("/settings/reset")
+    @PostMapping("/settings/reset")
     public ResponseEntity<Map<String, String>> resetSettings(
             @AuthenticationPrincipal AppUser appUser
     ) {
         settingsService.resetSettings(appUser);
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(Map.of("success", "Settings are reset for user " + appUser.getEmail()));
+                .body(Map.of("success", "Settings are reset."));
+    }
+
+    @PostMapping("/settings/reset/{mSymbol}")
+    public ResponseEntity<Map<String, String>> resetSettings(
+            @AuthenticationPrincipal AppUser appUser,
+            @PathVariable String mSymbol
+    ) {
+        settingsService.resetSettings(appUser, mSymbol);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(Map.of("success", "Settings are reset for " + mSymbol));
     }
 
     @DeleteMapping("/settings/{mSymbol}")

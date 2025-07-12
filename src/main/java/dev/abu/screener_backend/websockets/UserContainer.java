@@ -17,13 +17,17 @@ public class UserContainer {
 
     private final ObjectMapper mapper;
     private final AppUser user;
-    private final WebSocketSession session;
+    private final Set<WebSocketSession> sessions = ConcurrentHashMap.newKeySet();
     private final Map<String, TradeListDTO> orderBook = new ConcurrentHashMap<>();
 
     public UserContainer(AppUser user, WebSocketSession session, ObjectMapper mapper) {
         this.user = user;
-        this.session = session;
         this.mapper = mapper;
+        addSession(session);
+    }
+
+    public void addSession(WebSocketSession session) {
+        sessions.add(session);
     }
 
     public void take(String mSymbol, TradeListDTO event) {
@@ -35,16 +39,22 @@ public class UserContainer {
     }
 
     public void broadcastEvents() {
-        if (!session.isOpen() || orderBook.isEmpty()) {
+        if (sessions.isEmpty() || orderBook.isEmpty()) {
             return;
         }
 
-        try {
-            byte[] message = mapper.writeValueAsBytes(orderBook.values());
-            session.sendMessage(new TextMessage(message));
-        } catch (IOException e) {
-            log.error("Couldn't send data to user {}: {}", user.getEmail(), e.getMessage());
-        }
+        sessions.forEach(session -> {
+            if (!session.isOpen()) {
+                sessions.remove(session);
+                return;
+            }
+            try {
+                byte[] message = mapper.writeValueAsBytes(orderBook.values());
+                session.sendMessage(new TextMessage(message));
+            } catch (Exception e) {
+                log.error("Couldn't send data to user {}: {}", user.getEmail(), e.getMessage());
+            }
+        });
     }
 
     @Override

@@ -1,6 +1,7 @@
 package dev.abu.screener_backend.analysis;
 
 import dev.abu.screener_backend.settings.Settings;
+import dev.abu.screener_backend.settings.SettingsEntry;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -48,7 +49,7 @@ public class TradeList {
     }
 
     public TradeListDTO toDTO() {
-        return new TradeListDTO(mSymbol, bids, asks);
+        return new TradeListDTO(mSymbol, new ArrayList<>(bids), new ArrayList<>(asks));
     }
 
     private void analyzeNewData(GeneralTradeList gtl) {
@@ -82,8 +83,6 @@ public class TradeList {
                 continue;
             }
 
-            maxLevel = max(maxLevel, level);
-
             // otherwise, if pq has 5 elements then remove the smallest element from the pq
             if (pq.size() == MAX_TRADES) {
                 availableObjects.addLast(pq.poll());
@@ -96,17 +95,18 @@ public class TradeList {
             }
             trade.set(price, quantity, dist, level, time);
             pq.offer(trade);
+            maxLevel = max(maxLevel, level);
         }
     }
 
     private int getLevel(double price, double quantity, double distance) {
         double volume = settings.getSettingsType() == DOLLAR ? price * quantity : quantity;
-        LinkedHashMap<Double, Integer> settingsMap = settings.getEntries();
+        List<SettingsEntry> settingsMap = settings.getEntries();
 
         int level = 0;
         int i = 1;
-        for (Map.Entry<Double, Integer> entry : settingsMap.entrySet()) {
-            if (distance <= entry.getKey() && volume >= entry.getValue()) {
+        for (SettingsEntry entry : settingsMap) {
+            if (distance <= entry.getDistance() && volume >= entry.getValue()) {
                 level = i;
             }
             i++;

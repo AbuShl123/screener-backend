@@ -34,12 +34,11 @@ public class OBService {
     private final ObjectMapper mapper;
     private final EventDistributor eventDistributor;
     private final SettingsRepository settingsRepository;
-    private Settings allSymbolDefSettings;
+    @Getter private Settings allSymbolDefSettings;
 
     @PostConstruct
     public void init() {
-        allSymbolDefSettings = settingsRepository.findDefaultSettingsForAllSymbols()
-                .orElseThrow(() -> new RuntimeException("No default settings for all symbols found!!"));
+        allSymbolDefSettings = settingsRepository.findDefaultSettingsForAllSymbols().orElse(null);
     }
 
     public static void incrementReSyncCount(String websocketName, String symbol) {
@@ -80,17 +79,23 @@ public class OBService {
     public void dropOrderBooks(Collection<String> symbols, boolean isSpot) {
         for (String symbol : symbols) {
             String marketSymbol = isSpot ? symbol : symbol + FUT_SIGN;
-            orderBooks.remove(marketSymbol);
+            OrderBook ob = orderBooks.remove(marketSymbol);
+            Set<Settings> settings = settingsMap.remove(ob);
+            settings.forEach(setting -> {
+                tradeLists.remove(setting);
+                settingsCount.remove(setting);
+            });
         }
     }
 
     private void addDefaultTL(OrderBook orderBook) {
         settingsMap.computeIfAbsent(orderBook, k -> ConcurrentHashMap.newKeySet());
-        settingsRepository.findDefaultSettings(orderBook.getMSymbol())
-                .ifPresentOrElse(
-                        (s) -> addTL(orderBook, s),
-                        () -> addTL(orderBook, allSymbolDefSettings)
+        settingsRepository
+                .findDefaultSettings(orderBook.getMSymbol())
+                .ifPresent(
+                        (s) -> addTL(orderBook, s)
                 );
+        addTL(orderBook, allSymbolDefSettings);
     }
 
     public void addUserTL(Collection<Settings> userSettings) {
@@ -101,12 +106,14 @@ public class OBService {
             OrderBook ob = orderBooks.get(mSymbol);
 
             if (ob == null) {
+                // this condition is true when user has settings for the mSymbol that doesn't exist in Binance or isn't being analyzed by the screener.
                 log.warn("Order book not found for mSymbol: {}", mSymbol);
                 continue;
             }
 
             if (!settingsMap.containsKey(ob)) {
-                log.warn("{} order book has no DTL", mSymbol);
+                // this condition should never be true. If an order book exists, then it must have a DTL.
+                log.error("{} order book has no DTL", mSymbol);
                 continue;
             }
 
@@ -129,12 +136,18 @@ public class OBService {
                 OrderBook ob =  orderBooks.get(settings.getMSymbol());
 
                 settingsMap.get(ob).remove(settings);
-                settingsMap.remove(ob);
                 ob.removeTL(tl);
             }
         }
     }
 
+    /**
+     * Creates a new TL for the provided OrderBook. <br>
+     * Pre-req: this method assumes that no TL exists for the provided settings.
+     * If a method is called even though there already is a TL for the given settings, then it's a violation.
+     * @param ob an OrderBook object where TL must be added.
+     * @param settings a Settings object on which TL must be based on.
+     */
     private void addTL(OrderBook ob, Settings settings) {
         TradeList tl = new TradeList(settings, ob.getMSymbol());
         settingsMap.get(ob).add(settings);

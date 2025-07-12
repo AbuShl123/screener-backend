@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.abu.screener_backend.appuser.AppUserRepository;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,12 +21,18 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import javax.sql.DataSource;
+import java.util.Locale;
 
 @Configuration
 @RequiredArgsConstructor
 public class ApplicationConfig {
 
     private final AppUserRepository appUserRepository;
+
+    @PostConstruct
+    public void init() {
+        Locale.setDefault(Locale.US);
+    }
 
     @Bean
     public TaskScheduler taskScheduler() {

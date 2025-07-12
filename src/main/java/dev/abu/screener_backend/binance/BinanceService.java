@@ -21,6 +21,7 @@ import java.util.Set;
 import java.util.TreeMap;
 
 import static dev.abu.screener_backend.binance.OBService.printReSyncMap;
+import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
 @Slf4j
 @Service
@@ -47,6 +48,7 @@ public class BinanceService {
 
     @Scheduled(fixedDelay = 15 * 60_000)
     public void tickersUpdate() {
+        if (obService.getAllSymbolDefSettings() == null) return;
         obService.truncateOrderBooks();
         tickerService.updateTickers();
         spotDepthClient.listenToSymbols(tickerService.getSpotSymbols());
@@ -57,6 +59,12 @@ public class BinanceService {
     public void sendPongMessage() {
         spotDepthClient.sendPongMessage();
         futDepthClient.sendPongMessage();
+    }
+
+    public String get5MVolumeData(String mSymbol) {
+        String symbol = mSymbol.replace(FUT_SIGN, "").toUpperCase();
+        boolean isSpot = !mSymbol.endsWith(FUT_SIGN);
+        return BinanceClient.get5MVolumeData(symbol, isSpot);
     }
 
     public void depthSnapshot(HttpServletResponse response, String mSymbol) throws Exception {

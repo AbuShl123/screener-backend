@@ -14,7 +14,7 @@ public interface SettingsRepository extends JpaRepository<Settings, Long> {
     Optional<Settings> findBySettingsHash(String settingsHash);
 
     @Modifying
-    @Query("DELETE FROM Settings s WHERE s.id NOT IN (SELECT us.settings.id FROM UserSettings us)")
+    @Query("DELETE FROM Settings s WHERE s.id NOT IN (SELECT us.settings.id FROM UserSettings us) and s.settingsHash not like 'default%'")
     void deleteOrphanedSettings();
 
     @Query("SELECT s FROM Settings s WHERE s.settingsHash LIKE 'default%'")

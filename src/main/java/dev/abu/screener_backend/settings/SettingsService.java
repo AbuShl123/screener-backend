@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.abu.screener_backend.appuser.AppUser;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -13,6 +14,7 @@ import java.util.*;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class SettingsService {
 
     private final ObjectMapper mapper;
@@ -23,16 +25,18 @@ public class SettingsService {
     @Transactional
     public void cleanUpUnusedSettings() {
         settingsRepository.deleteOrphanedSettings();
+        log.info("Deleted unused settings");
     }
 
     @Transactional
     public void saveSettings(AppUser appUser, SettingsRequestDTO settingsRequest) {
         checkInvariants(settingsRequest);
 
-        LinkedHashMap<Double, Integer> settingsMap = settingsRequest.getEntries();
+        List<SettingsEntry> settingsMap = settingsRequest.getEntries();
         String mSymbol = settingsRequest.getMSymbol();
         SettingsType type = settingsRequest.getType();
-        String settingHash = computeSettingHash(settingsMap, mSymbol, type);
+        boolean audio = settingsRequest.isAudio();
+        String settingHash = computeSettingHash(mSymbol, audio, type, settingsMap);
 
         // scenario 1: user already has a record for a given mSymbol in the UserSettings table
         // scenario 1.1: the requested settings are exactly equal to existing settings
@@ -49,50 +53,6 @@ public class SettingsService {
         } else {
             handleNewRecord(appUser, settingHash, settingsRequest);
         }
-    }
-
-    // scenario 1: user already has a record for a given mSymbol in the UserSettings table
-    private void handleExistingRecord(UserSettings userSettings, String requestedSettingsHash, SettingsRequestDTO settingsRequest) {
-        Settings existingSettings = userSettings.getSettings();
-
-        // scenario 1.1: the requested settings are exactly equal to existing settings
-        if (existingSettings.getSettingsHash().equals(requestedSettingsHash)) {
-            return;
-        }
-
-        long settingsCount = userSettingsRepository.countBySettings(existingSettings);
-        var mSymbol = settingsRequest.getMSymbol();
-        var type = settingsRequest.getType();
-        var entries = settingsRequest.getEntries();
-
-        // scenario 1.2: existing settings are used only by this user
-        if (settingsCount == 1) {
-            existingSettings.setNewValues(mSymbol, type, entries, requestedSettingsHash);
-            settingsRepository.save(existingSettings);
-            return;
-        }
-
-        // scenario 1.3: existing settings are used by many users
-        Settings newSettings = constructSettings(mSymbol, type, entries, requestedSettingsHash);
-        settingsRepository.save(newSettings);
-        userSettings.setSettings(newSettings);
-        userSettingsRepository.save(userSettings);
-    }
-
-    // scenario 2: user has no record for a given mSymbol in the UserSettings table
-    private void handleNewRecord(AppUser appUser, String requestedSettingsHash, SettingsRequestDTO settingsRequest) {
-        Settings settings = settingsRepository.findBySettingsHash(requestedSettingsHash)
-                .orElseGet(() -> {
-                    Settings newSettings = constructSettings(
-                            settingsRequest.getMSymbol(),
-                            settingsRequest.getType(),
-                            settingsRequest.getEntries(),
-                            requestedSettingsHash
-                    );
-                    return settingsRepository.save(newSettings);
-                });
-        UserSettings userSettings = new UserSettings(appUser, settings);
-        userSettingsRepository.save(userSettings);
     }
 
     @Transactional
@@ -116,11 +76,27 @@ public class SettingsService {
             deleteUserSettings(userSettings);
         }
 
+        Collection<Settings> settings = userSettingsRepository.findAllSettingsByAppUser(appUser);
         List<Settings> allDefaultSettings = settingsRepository.findAllDefaultSettings();
         for (Settings defaultSettings : allDefaultSettings) {
+            if (defaultSettings.getSettingsHash().contains("all") && settings.contains(defaultSettings)) continue;
             UserSettings userSettings = new UserSettings(appUser, defaultSettings);
             userSettingsRepository.save(userSettings);
         }
+    }
+
+    @Transactional
+    public void resetSettings(AppUser appUser, String mSymbol) {
+        if (mSymbol == null || mSymbol.isEmpty() || mSymbol.equalsIgnoreCase("all")) return;
+        mSymbol = mSymbol.toLowerCase();
+
+        userSettingsRepository.findByAppUserAndSettings_mSymbol(appUser, mSymbol)
+                .ifPresent(this::deleteUserSettings);
+
+        settingsRepository.findDefaultSettings(mSymbol).ifPresent(defSettings -> {
+            UserSettings userSettings = new UserSettings(appUser, defSettings);
+            userSettingsRepository.save(userSettings);
+        });
     }
 
     public UserSettingsResponse getAllSettings(AppUser appUser) {
@@ -140,19 +116,70 @@ public class SettingsService {
         return Optional.of(new UserSettingsResponse(appUser.getEmail(), List.of(settings)));
     }
 
+    // scenario 1: user already has a record for a given mSymbol in the UserSettings table
+    private void handleExistingRecord(UserSettings userSettings, String requestedSettingsHash, SettingsRequestDTO settingsRequest) {
+        Settings existingSettings = userSettings.getSettings();
+
+        // scenario 1.1: the requested settings are exactly equal to existing settings
+        if (existingSettings.getSettingsHash().equals(requestedSettingsHash)) {
+            return;
+        }
+
+        long settingsCount = userSettingsRepository.countBySettings(existingSettings);
+        var mSymbol = settingsRequest.getMSymbol();
+        var type = settingsRequest.getType();
+        var entries = settingsRequest.getEntries();
+        var audio = settingsRequest.isAudio();
+
+        // scenario 1.2: existing settings are used only by this user
+        if (settingsCount == 1 && !existingSettings.getSettingsHash().contains("default")) {
+            existingSettings.setNewValues(mSymbol, audio, type, entries, requestedSettingsHash);
+            settingsRepository.save(existingSettings);
+            return;
+        }
+
+        // scenario 1.3: existing settings are used by many users
+        Settings newSettings = constructSettings(mSymbol, audio, type, entries, requestedSettingsHash);
+        settingsRepository.save(newSettings);
+        userSettings.setSettings(newSettings);
+        userSettingsRepository.save(userSettings);
+    }
+
+    // scenario 2: user has no record for a given mSymbol in the UserSettings table
+    private void handleNewRecord(AppUser appUser, String requestedSettingsHash, SettingsRequestDTO settingsRequest) {
+        Settings settings = settingsRepository.findBySettingsHash(requestedSettingsHash)
+                .orElseGet(() -> {
+                    Settings newSettings = constructSettings(
+                            settingsRequest.getMSymbol(),
+                            settingsRequest.isAudio(),
+                            settingsRequest.getType(),
+                            settingsRequest.getEntries(),
+                            requestedSettingsHash
+                    );
+                    return settingsRepository.save(newSettings);
+                });
+        UserSettings userSettings = new UserSettings(appUser, settings);
+        userSettingsRepository.save(userSettings);
+    }
+
     private void deleteUserSettings(UserSettings userSettings) {
-        userSettingsRepository.delete(userSettings);
         Settings settings = userSettings.getSettings();
+        if (settings.getSettingsHash().contains("all")) return;
+
+        userSettingsRepository.delete(userSettings);
+        if (settings.getSettingsHash().contains("default")) return;
+
         long count = userSettingsRepository.countBySettings(settings);
         if (count == 0) {
             settingsRepository.delete(settings);
         }
     }
 
-    private String computeSettingHash(Map<Double, Integer> settingsMap, String mSymbol, SettingsType type) {
+    private String computeSettingHash(String mSymbol, boolean audio, SettingsType type, List<SettingsEntry> settingsMap) {
         try {
             Map<String, Object> hashSource = new LinkedHashMap<>();
             hashSource.put("mSymbol", mSymbol);
+            hashSource.put("audio", audio);
             hashSource.put("entries", settingsMap);
             hashSource.put("type", type);
             String json = mapper.writeValueAsString(hashSource);
@@ -162,9 +189,10 @@ public class SettingsService {
         }
     }
 
-    private Settings constructSettings(String mSymbol, SettingsType type, LinkedHashMap<Double, Integer> settingsMap, String settingsHash) {
+    private Settings constructSettings(String mSymbol, boolean audio, SettingsType type, List<SettingsEntry> settingsMap, String settingsHash) {
         return new Settings(
                 mSymbol,
+                audio,
                 type,
                 settingsMap,
                 settingsHash

@@ -1,4 +1,4 @@
-package dev.abu.screener_backend.binance.depth;
+package dev.abu.screener_backend.binance;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.http.HttpEntity;
@@ -14,10 +14,11 @@ import java.util.concurrent.locks.ReentrantLock;
 import static dev.abu.screener_backend.utils.EnvParams.FUT_URL;
 import static dev.abu.screener_backend.utils.EnvParams.SPOT_URL;
 
+//TODO: maybe it's better to make this class a spring-managed Bean and get rid of static keywords.
 @Slf4j
-public class DepthClient {
+public class BinanceClient {
 
-    private DepthClient() {}
+    private BinanceClient() {}
 
     private static final int SPOT_API_RATE_LIMIT = 5700;
     private static final int FUT_API_RATE_LIMIT = 2300;
@@ -51,33 +52,58 @@ public class DepthClient {
         ReentrantLock lock = isSpot ? spotLock : futLock;
         lock.lock();
         try {
-            checkRateLimits(isSpot);
-            String baseUri = isSpot ? SPOT_URL : FUT_URL;
-            HttpGet depthRequest = new HttpGet(baseUri + "/depth?symbol=" + symbol.toUpperCase() + "&limit=1000");
-            depthRequest.addHeader("Accept", "application/json");
-
-            try (var response = httpClient.execute(depthRequest)) {
-                HttpEntity entity = response.getEntity();
-
-                // record the current used request weight
-                String xMbxUsedWeight1m = response.getFirstHeader("x-mbx-used-weight-1m").getValue();
-                int usedWeight = Integer.parseInt(xMbxUsedWeight1m);
-                if (isSpot) {
-                    usedWeight1mSpot.set(usedWeight);
-                } else {
-                    usedWeight1mFut.set(usedWeight);
-                }
-
-                if (entity != null) {
-                    return EntityUtils.toString(entity);
-                } else return null;
-
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to send request for depth snapshot: " + e.getMessage(), e);
-            }
-
+            return executeRequest("/depth?symbol=" + symbol.toUpperCase() + "&limit=1000", isSpot);
         } finally {
             lock.unlock();
+        }
+    }
+
+    /**
+     * @param symbol symbol to get depth snapshot for (note: without FUT_SIGN).
+     * @param isSpot boolean to specify the market, true=spot false=futures.
+     * @return a klines data of the given symbol for an interval of 5min.
+     */
+    public static String get5MVolumeData(String symbol, boolean isSpot) {
+        ReentrantLock lock = isSpot ? spotLock : futLock;
+        lock.lock();
+        try {
+            return executeRequest("/klines?symbol=" + symbol.toUpperCase() + "&interval=5m&limit=1", isSpot);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * A generic method that executes an HTTP binance request for a given url path.
+     *
+     * @param path everything in the URL that comes after a base uri.
+     * @param isSpot boolean to specify the market, true=spot false=futures.
+     * @return a response from the Binance server as a result of hitting the provided endpoint.
+     */
+    private static String executeRequest(String path, boolean isSpot) {
+        checkRateLimits(isSpot);
+        String baseUri = isSpot ? SPOT_URL : FUT_URL;
+        HttpGet depthRequest = new HttpGet(baseUri + path);
+        depthRequest.addHeader("Accept", "application/json");
+
+        try (var response = httpClient.execute(depthRequest)) {
+            HttpEntity entity = response.getEntity();
+
+            // record the current used request weight
+            String xMbxUsedWeight1m = response.getFirstHeader("x-mbx-used-weight-1m").getValue();
+            int usedWeight = Integer.parseInt(xMbxUsedWeight1m);
+            if (isSpot) {
+                usedWeight1mSpot.set(usedWeight);
+            } else {
+                usedWeight1mFut.set(usedWeight);
+            }
+
+            if (entity != null) {
+                return EntityUtils.toString(entity);
+            } else return null;
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to send request for depth snapshot: " + e.getMessage(), e);
         }
     }
 
@@ -135,37 +161,4 @@ public class DepthClient {
             log.error("Thread interrupted during rate limit wait: {}", e.getMessage());
         }
     }
-
-//    public static void main(String[] args) {
-//        Thread spotThread = new Thread(() -> {
-//            log.info("Spot starting");
-//            long startTime = System.currentTimeMillis();
-//            int count = 0;
-//            while (true) {
-//                getInitialSnapshot("btcusdt", true);
-//                count++;
-//                if (System.currentTimeMillis() - startTime > 60_000) {
-//                    log.info("Spot received {} snapshots", count);
-//                    startTime = System.currentTimeMillis();
-//                    count = 0;
-//                }
-//            }
-//        });
-//        Thread futThread = new Thread(() -> {
-//            log.info("Futures starting");
-//            long startTime = System.currentTimeMillis();
-//            int count = 0;
-//            while (true) {
-//                getInitialSnapshot("btcusdt", false);
-//                count++;
-//                if (System.currentTimeMillis() - startTime > 60_000) {
-//                    log.info("Futures received {} snapshots", count);
-//                    startTime = System.currentTimeMillis();
-//                    count = 0;
-//                }
-//            }
-//        });
-//        spotThread.start();
-//        futThread.start();
-//    }
 }

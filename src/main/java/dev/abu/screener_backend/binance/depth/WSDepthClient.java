@@ -5,7 +5,6 @@ import dev.abu.screener_backend.binance.OBService;
 import jakarta.websocket.ContainerProvider;
 import jakarta.websocket.WebSocketContainer;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.PongMessage;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -13,25 +12,24 @@ import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 @Slf4j
 public abstract class WSDepthClient {
 
     protected final StandardWebSocketClient client;
-    protected final String baseUrl;
+    protected final String url;
     protected final String name;
     protected final boolean isSpot;
     private final OBService obService;
     protected WebSocketSession session;
     protected WSDepthHandler wsDepthHandler;
     protected final Set<String> connectedSymbols;
+    private final Object reconnectLock = new Object();
+    CompletableFuture<WebSocketSession> currentConnectionFuture;
 
     public WSDepthClient(
-            String baseUrl,
+            String url,
             String name,
             boolean isSpot,
             OBService obService
@@ -42,15 +40,15 @@ public abstract class WSDepthClient {
         this.isSpot = isSpot;
         this.obService = obService;
         this.connectedSymbols = ConcurrentHashMap.newKeySet();
-        this.baseUrl = baseUrl;
+        this.url = url;
         this.name = name;
         OBService.prepareReSyncMap(name);
     }
 
     public void startWebSocket() {
-        var future = client.execute(wsDepthHandler, baseUrl);
+        currentConnectionFuture = client.execute(wsDepthHandler, url);
         try {
-            session = future.get();
+            session = currentConnectionFuture.get();
         } catch (InterruptedException | ExecutionException e) {
             log.error("{} couldn't connect to websocket {}", name, e.getMessage());
             reconnect();
@@ -58,38 +56,44 @@ public abstract class WSDepthClient {
     }
 
     public void reconnect() {
-        log.info("{} Attempting reconnection", name);
-        disconnect();
+        synchronized (reconnectLock) {
+            log.info("{} Attempting reconnection", name);
 
-        var symbols = new HashSet<>(connectedSymbols);
-        connectedSymbols.clear();
+            var symbols = new HashSet<>(connectedSymbols);
+            connectedSymbols.clear();
+            int attempts = 0;
 
-        int attempts = 0;
-        while (attempts < 5 && (session == null || !session.isOpen())) {
-            try {
-                var future = client.execute(wsDepthHandler, baseUrl);
-                session = future.get(3, TimeUnit.MINUTES);
-            } catch (Exception e) {
-                log.error("{} Reconnection attempt {} failed: {}", name, attempts, e.getMessage());
-                attempts++;
+            do {
                 try {
-                    Thread.sleep(2000L);
-                } catch (InterruptedException ex) {
-                    Thread.currentThread().interrupt();
+                    disconnect(currentConnectionFuture);
+                    currentConnectionFuture = client.execute(wsDepthHandler, url);
+                    session = currentConnectionFuture.get(3, TimeUnit.MINUTES);
+                    log.info("{} successfully reconnected", name);
+                } catch (Exception e) {
+                    log.error("{} Reconnection attempt {} failed: {}", name, attempts, e.getMessage());
+                    attempts++;
+                    try {
+                        Thread.sleep(2000L);
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
                 }
-            }
-        }
+            } while (attempts < 5 && (session == null || !session.isOpen()));
 
-        listenToSymbols(symbols);
+            listenToSymbols(symbols);
+        }
     }
 
-    public void disconnect() {
+    public void disconnect(CompletableFuture<WebSocketSession> currentConnectFuture) {
+        if (currentConnectFuture != null) {
+            currentConnectFuture.cancel(true);
+        }
         if (session != null && session.isOpen()) {
             try {
                 session.close();
                 session = null;
             } catch (IOException e) {
-                log.warn("{} failed to disconnect {}", name, e.getMessage());
+                log.warn("{} failed to disconnect: {}", name, e.getMessage());
             }
         }
     }

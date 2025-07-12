@@ -6,6 +6,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -19,25 +21,30 @@ public class Settings {
     @Column(nullable = false)
     private String mSymbol;
 
+    @Column(nullable = false)
+    private boolean audio = true;
+
     @Enumerated(EnumType.STRING)
     private SettingsType settingsType;
 
     @Column(columnDefinition = "TEXT")
-    @Convert(converter = MapToJsonConverter.class)
-    private LinkedHashMap<Double, Integer> entries;
+    @Convert(converter = EntryToJsonConverter.class)
+    private List<SettingsEntry> entries;
 
     @Column(unique = true)
     private String settingsHash;
 
-    public Settings(String mSymbol, SettingsType settingsType, LinkedHashMap<Double, Integer> entries, String settingsHash) {
+    public Settings(String mSymbol, boolean audio, SettingsType settingsType, List<SettingsEntry> entries, String settingsHash) {
         this.mSymbol = mSymbol;
+        this.audio = audio;
         this.settingsType = settingsType;
         this.entries = entries;
         this.settingsHash = settingsHash;
     }
 
-    public void setNewValues(String mSymbol, SettingsType settingsType, LinkedHashMap<Double, Integer> entries, String settingsHash) {
+    public void setNewValues(String mSymbol, boolean audio, SettingsType settingsType, List<SettingsEntry> entries, String settingsHash) {
         this.mSymbol = mSymbol;
+        this.audio = audio;
         this.settingsType = settingsType;
         this.entries = entries;
         this.settingsHash = settingsHash;

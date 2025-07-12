@@ -7,7 +7,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,25 +20,33 @@ public class EventDistributor {
 
     @Scheduled(fixedRate = 100L)
     public void broadcastData() {
-        Set<UserContainer> seen = ConcurrentHashMap.newKeySet();
-        users.values().stream()
-                .flatMap(Set::stream)
-                .filter(seen::add)
-                .forEach(UserContainer::broadcastEvents);
+        try {
+            Set<UserContainer> seen = ConcurrentHashMap.newKeySet();
+            users.values().stream()
+                    .flatMap(Set::stream)
+                    .filter(seen::add)
+                    .forEach(UserContainer::broadcastEvents);
+        } catch (Exception e) {
+            log.warn(e.getMessage(), e);
+        }
     }
 
     public void distribute(String hash, int level, TradeListDTO tradeListDTO) {
-        if (level == 0) {
-            deleteEvents(hash, tradeListDTO);
-        } else {
-            addEvent(hash, tradeListDTO);
+        try {
+            if (level == 0) {
+                deleteEvents(hash, tradeListDTO);
+            } else {
+                addEvent(hash, tradeListDTO);
+            }
+        } catch (Exception e) {
+            log.error("Could not distribute event for {}", tradeListDTO.s(), e);
         }
     }
 
     public void registerUser(Collection<Settings> settings, UserContainer userContainer) {
         for (Settings s : settings) {
             var hash = s.getSettingsHash();
-            if (!hash.contains("default")) {
+            if (!hash.contains("all")) {
                 customizedSymbols.computeIfAbsent(userContainer, k -> ConcurrentHashMap.newKeySet()).add(s.getMSymbol());
             }
             if (users.containsKey(hash)) {
@@ -53,6 +60,7 @@ public class EventDistributor {
     }
 
     public void unregisterUser(Collection<Settings> settings, UserContainer userContainer) {
+        customizedSymbols.remove(userContainer);
         for (Settings s : settings) {
             var hash = s.getSettingsHash();
             if (users.containsKey(hash)) {
@@ -79,19 +87,24 @@ public class EventDistributor {
     }
 
     private void addEvent(String hash, TradeListDTO tradeListDTO) {
-        Set<UserContainer> containers = getUsers(hash);
-        if (containers == null) return;
+        Set<UserContainer> containers = users.get(hash);
+        if (containers == null || containers.isEmpty()) return;
+
         String mSymbol = tradeListDTO.s();
-        if (hash.contains("default")) {
-            containers.stream().filter(u -> !customizedSymbols.get(u).contains(mSymbol)).forEach(u -> u.take(mSymbol, tradeListDTO));
+
+        if (hash.contains("all")) {
+            containers.stream()
+                    .filter(user -> {
+                        Set<String> cs = customizedSymbols.get(user);
+                        return cs == null || !cs.contains(mSymbol);
+                    })
+                    .forEach(user -> user.take(mSymbol, tradeListDTO));
         } else {
-            containers.forEach(u -> u.take(mSymbol, tradeListDTO));
+            containers.forEach(user -> user.take(mSymbol, tradeListDTO));
         }
     }
 
     private Set<UserContainer> getUsers(String hash) {
-        Set<UserContainer> containers = users.get(hash);
-        if (containers == null) return null;
-        return containers;
+        return users.get(hash);
     }
 }

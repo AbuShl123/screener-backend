@@ -21,11 +21,6 @@ public interface UserSettingsRepository extends JpaRepository<UserSettings, Long
     @Query("SELECT us.settings FROM UserSettings us where us.appUser = :appUser")
     Collection<Settings> findAllSettingsByAppUser(@Param("appUser") AppUser appUser);
 
-    @Query("SELECT us.settings.settingsHash FROM UserSettings us where us.appUser = :appUser")
-    Set<String> findAllSettingHashesByAppUser(@Param("appUser") AppUser appUser);
-
     @Query("SELECT COUNT(us) FROM UserSettings us WHERE us.settings = :settings")
     long countBySettings(@Param("settings") Settings settings);
-
-    void deleteAllByAppUser(AppUser appUser);
 }

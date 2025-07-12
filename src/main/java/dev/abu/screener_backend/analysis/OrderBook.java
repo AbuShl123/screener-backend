@@ -11,7 +11,7 @@ import java.util.Set;
 
 import static dev.abu.screener_backend.binance.OBService.decrementReSyncCount;
 import static dev.abu.screener_backend.binance.OBService.incrementReSyncCount;
-import static dev.abu.screener_backend.binance.depth.DepthClient.getInitialSnapshot;
+import static dev.abu.screener_backend.binance.BinanceClient.getInitialSnapshot;
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 
 @Slf4j
@@ -162,9 +162,7 @@ public class OrderBook {
         generalTradeList.process(depthUpdate.getBids(), depthUpdate.getAsks(), initialSnapshot);
         tls.forEach(tl -> {
             tl.process(generalTradeList);
-            if (tl.getMaxLevel() >= 1 || tl.getPrevMaxLevel() >= 1) {
-                eventDistributor.distribute(tl.getSettings().getSettingsHash(), tl.getMaxLevel(), tl.toDTO());
-            }
+            eventDistributor.distribute(tl.getSettings().getSettingsHash(), tl.getMaxLevel(), tl.toDTO());
         });
     }
 

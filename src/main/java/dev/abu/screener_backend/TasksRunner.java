@@ -1,6 +1,7 @@
 package dev.abu.screener_backend;
 
 import dev.abu.screener_backend.appuser.AppUserRepository;
+import dev.abu.screener_backend.binance.OBService;
 import dev.abu.screener_backend.settings.*;
 import dev.abu.screener_backend.subscription.plan.SubscriptionPlan;
 import dev.abu.screener_backend.subscription.plan.SubscriptionPlanDuration;
@@ -9,7 +10,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
@@ -24,10 +27,11 @@ public class TasksRunner implements CommandLineRunner {
     private final AppUserRepository appUserRepository;
     private final UserSettingsRepository userSettingsRepository;
     private final SettingsService settingsService;
+    private final OBService obService;
 
     @Override
     public void run(String... args) {
-
+        addDefaultSettings();
     }
 
     private void addSubscriptionPlans() {
@@ -61,7 +65,11 @@ public class TasksRunner implements CommandLineRunner {
 
     }
 
-    private void addDefaultSettings() {
+    public void resetSettingsForAllUsers() {
+        appUserRepository.findAll().forEach(settingsService::resetSettings);
+    }
+
+    public void addDefaultSettings() {
         List<Settings> defaultSettings = settingsRepository.findAllDefaultSettings();
         if (!defaultSettings.isEmpty()) return;
 
@@ -69,21 +77,25 @@ public class TasksRunner implements CommandLineRunner {
         // 1.0, 1_000_000
         // 2.0, 3_000_000
         // 6.0, 10_000_000
-        LinkedHashMap<Double, Integer> map = new LinkedHashMap<>();
-        map.put(1.0, 500_000);
-        map.put(0.5, 1_000_000);
-        map.put(2.0, 3_000_000);
-        map.put(6.0, 10_000_000);
+        List<SettingsEntry> entries = new ArrayList<>();
+        entries.add(new SettingsEntry(0.5, 500_000));
+        entries.add(new SettingsEntry(1.0, 1_000_000));
+        entries.add(new SettingsEntry(2.0, 3_000_000));
+        entries.add(new SettingsEntry(5.0, 10_000_000));
 
-        Settings settings = new Settings("all", SettingsType.DOLLAR, map, "default_all");
+        Settings settings = new Settings("all", true, SettingsType.DOLLAR, entries, "default_all");
         settingsRepository.save(settings);
 
         var largeTickers = Set.of("btcusdt", "btcusdt.f", "ethusdt", "ethusdt.f", "solusdt", "solusdt.f");
-        map.forEach((key, value) -> map.put(key, value * 10));
+        entries.forEach((entry) -> entry.setValue(entry.getValue() * 10));
 
         for (String largeTicker : largeTickers) {
-            settings = new Settings(largeTicker, SettingsType.DOLLAR, map, "default_" + largeTicker);
+            settings = new Settings(largeTicker, true, SettingsType.DOLLAR, entries, "default_" + largeTicker);
             settingsRepository.save(settings);
         }
+
+        log.info("Added default settings");
+        resetSettingsForAllUsers();
+        log.info("Reset settings for all users");
     }
 }

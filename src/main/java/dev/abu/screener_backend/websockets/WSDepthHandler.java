@@ -16,6 +16,15 @@ public class WSDepthHandler extends TextWebSocketHandler {
 
     private final SessionManager sessionManager;
 
+    @Scheduled(fixedDelay = 180_000L)
+    public void cleanUpStaleSessions() {
+        for (WebSocketSession session : sessionManager.getAllSessions()) {
+            if (!session.isOpen()) {
+                sessionManager.removeSession(session);
+            }
+        }
+    }
+
     @Override
     public void afterConnectionEstablished(@NonNull WebSocketSession session) {
         sessionManager.addSession(session);
