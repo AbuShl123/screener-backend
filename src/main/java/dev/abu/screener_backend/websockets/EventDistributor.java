@@ -73,17 +73,21 @@ public class EventDistributor {
         }
     }
 
-    public void detachUser(String hash, UserContainer user) {
-        Set<UserContainer> containers = getUsers(hash);
-        if (containers == null) return;
-        containers.remove(user);
-    }
-
     private void deleteEvents(String hash, TradeListDTO tradeListDTO) {
         Set<UserContainer> containers = getUsers(hash);
         if (containers == null) return;
         String mSymbol = tradeListDTO.s();
-        containers.forEach(u -> u.remove(mSymbol));
+
+        if (hash.contains("all")) {
+            containers.stream()
+                    .filter(user -> {
+                        Set<String> cs = customizedSymbols.get(user);
+                        return cs == null || !cs.contains(mSymbol);
+                    })
+                    .forEach(u -> u.remove(mSymbol));
+        } else {
+            containers.forEach(u -> u.remove(mSymbol));
+        }
     }
 
     private void addEvent(String hash, TradeListDTO tradeListDTO) {
