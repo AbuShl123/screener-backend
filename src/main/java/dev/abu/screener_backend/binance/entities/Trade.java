@@ -1,12 +1,10 @@
-package dev.abu.screener_backend.analysis;
+package dev.abu.screener_backend.binance.entities;
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-
-import java.io.Serializable;
 
 import static java.lang.Math.abs;
 

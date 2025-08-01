@@ -1,4 +1,6 @@
-package dev.abu.screener_backend.analysis;
+package dev.abu.screener_backend.binance.dt;
+
+import dev.abu.screener_backend.binance.entities.Trade;
 
 import java.util.Collection;
 

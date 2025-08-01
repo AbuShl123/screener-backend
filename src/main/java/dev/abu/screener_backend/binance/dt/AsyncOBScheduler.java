@@ -1,4 +1,4 @@
-package dev.abu.screener_backend.analysis;
+package dev.abu.screener_backend.binance.dt;
 
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;

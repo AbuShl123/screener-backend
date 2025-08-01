@@ -1,4 +1,4 @@
-package dev.abu.screener_backend.analysis;
+package dev.abu.screener_backend.binance.entities;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonSerializer;

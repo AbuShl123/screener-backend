@@ -2,12 +2,9 @@ package dev.abu.screener_backend.binance;
 
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.abu.screener_backend.analysis.OrderBook;
-import dev.abu.screener_backend.analysis.TradeListDTO;
-import dev.abu.screener_backend.binance.depth.WSFutDepthClient;
-import dev.abu.screener_backend.binance.depth.WSSpotDepthClient;
+import dev.abu.screener_backend.binance.ws.BinanceWebSocket;
+import dev.abu.screener_backend.binance.entities.KlineInterval;
+import dev.abu.screener_backend.binance.ws.KlineEventConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -16,8 +13,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.OutputStream;
+import java.util.Collection;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 
 import static dev.abu.screener_backend.binance.OBService.printReSyncMap;
@@ -28,15 +25,13 @@ import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 @RequiredArgsConstructor
 public class BinanceService {
 
+    private final BinanceWebSocket binanceWebSocket;
     private final TickerService tickerService;
     private final OBService obService;
-    private final WSSpotDepthClient spotDepthClient;
-    private final WSFutDepthClient futDepthClient;
+    private final KlineEventConsumer klineEventConsumer;
 
     @PostConstruct
     public void setup() {
-        spotDepthClient.startWebSocket();
-        futDepthClient.startWebSocket();
         syncEveryMinute();
     }
 
@@ -51,20 +46,28 @@ public class BinanceService {
         if (obService.getAllSymbolDefSettings() == null) return;
         obService.truncateOrderBooks();
         tickerService.updateTickers();
-        spotDepthClient.listenToSymbols(tickerService.getSpotSymbols());
-        futDepthClient.listenToSymbols(tickerService.getFutSymbols());
+
+        Collection<String> spotSymbols = tickerService.getSpotSymbols();
+        Collection<String> futSymbols = tickerService.getFutSymbols().stream().toList().subList(0, 50);
+
+        klineEventConsumer.fetchHistoricalData(spotSymbols, true);
+        klineEventConsumer.fetchHistoricalData(futSymbols, false);
+
+        binanceWebSocket.subscribeToKline(spotSymbols, KlineInterval.MIN_5, true);
+        binanceWebSocket.subscribeToKline(futSymbols, KlineInterval.MIN_5, false);
+
+        binanceWebSocket.subscribeToDepth(spotSymbols, true);
+        binanceWebSocket.subscribeToDepth(futSymbols, false);
     }
 
-    @Scheduled(initialDelay = 60_000, fixedDelay = 180_000)
-    public void sendPongMessage() {
-        spotDepthClient.sendPongMessage();
-        futDepthClient.sendPongMessage();
-    }
-
-    public String get5MVolumeData(String mSymbol) {
+    public String getKlinesData(String mSymbol, String interval, String limit) {
         String symbol = mSymbol.replace(FUT_SIGN, "").toUpperCase();
         boolean isSpot = !mSymbol.endsWith(FUT_SIGN);
-        return BinanceClient.get5MVolumeData(symbol, isSpot);
+        return BinanceClient.getKlinesData(symbol, interval, limit, isSpot);
+    }
+
+    public String getGVolume() {
+        return klineEventConsumer.getGVolumeJsonData();
     }
 
     public void depthSnapshot(HttpServletResponse response, String mSymbol) throws Exception {
@@ -91,10 +94,6 @@ public class BinanceService {
         gen.writeEndObject();
         gen.flush();
         gen.close();
-    }
-
-    public JsonNode topOrderBook(String mSymbol) {
-        return null;
     }
 
     private void writeSide(JsonGenerator gen, String fieldName, Map<Double, Double> side) throws Exception {

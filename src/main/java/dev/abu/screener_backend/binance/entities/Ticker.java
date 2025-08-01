@@ -1,4 +1,4 @@
-package dev.abu.screener_backend.binance;
+package dev.abu.screener_backend.binance.entities;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;

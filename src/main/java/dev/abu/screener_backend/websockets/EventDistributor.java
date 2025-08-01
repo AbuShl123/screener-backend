@@ -1,6 +1,6 @@
 package dev.abu.screener_backend.websockets;
 
-import dev.abu.screener_backend.analysis.TradeListDTO;
+import dev.abu.screener_backend.binance.dt.TradeListDTO;
 import dev.abu.screener_backend.settings.Settings;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import dev.abu.screener_backend.binance.entities.Ticker;
 import dev.abu.screener_backend.websockets.WSOpenInterestHandler;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;

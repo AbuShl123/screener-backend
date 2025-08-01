@@ -1,4 +1,4 @@
-package dev.abu.screener_backend.binance.depth;
+package dev.abu.screener_backend.binance.entities;
 
 import java.util.List;
 
@@ -6,9 +6,14 @@ import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.Getter;
+import lombok.Setter;
 
 @Getter
-public class DepthUpdate {
+public class DepthEvent {
+
+    @Setter
+    private boolean isSpot;
+
     @JsonProperty("e")
     private String eventType;
 
@@ -26,7 +31,7 @@ public class DepthUpdate {
 
     @JsonProperty("pu")
     @JsonAlias({"lastUpdateId"})
-    private long lastUpdateId;
+    private Long lastUpdateId;
 
     @JsonProperty("b")
     @JsonAlias({"bids"})

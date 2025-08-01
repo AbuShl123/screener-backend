@@ -59,15 +59,19 @@ public class BinanceClient {
     }
 
     /**
+     *
      * @param symbol symbol to get depth snapshot for (note: without FUT_SIGN).
+     * @param interval candlestick interval
+     * @param limit limit value
      * @param isSpot boolean to specify the market, true=spot false=futures.
-     * @return a klines data of the given symbol for an interval of 5min.
+     * @return a klines data of the given symbol
      */
-    public static String get5MVolumeData(String symbol, boolean isSpot) {
+    public static String getKlinesData(String symbol, String interval, String limit, boolean isSpot) {
         ReentrantLock lock = isSpot ? spotLock : futLock;
         lock.lock();
         try {
-            return executeRequest("/klines?symbol=" + symbol.toUpperCase() + "&interval=5m&limit=1", isSpot);
+            String path = String.format("/klines?symbol=%s&interval=%s&limit=%s", symbol.toUpperCase(), interval, limit);
+            return executeRequest(path, isSpot);
         } finally {
             lock.unlock();
         }

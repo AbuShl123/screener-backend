@@ -1,14 +1,12 @@
 package dev.abu.screener_backend.websockets;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.abu.screener_backend.analysis.TradeListDTO;
+import dev.abu.screener_backend.binance.dt.TradeListDTO;
 import dev.abu.screener_backend.appuser.AppUser;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.socket.BinaryMessage;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 
-import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 

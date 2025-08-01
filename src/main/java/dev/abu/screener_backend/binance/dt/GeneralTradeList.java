@@ -1,6 +1,6 @@
-package dev.abu.screener_backend.analysis;
+package dev.abu.screener_backend.binance.dt;
 
-import dev.abu.screener_backend.binance.depth.PriceLevel;
+import dev.abu.screener_backend.binance.entities.PriceLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 

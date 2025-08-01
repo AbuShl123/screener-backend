@@ -1,7 +1,10 @@
-package dev.abu.screener_backend.analysis;
+package dev.abu.screener_backend.binance;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.abu.screener_backend.binance.depth.DepthUpdate;
+import dev.abu.screener_backend.binance.dt.AsyncOBScheduler;
+import dev.abu.screener_backend.binance.dt.GeneralTradeList;
+import dev.abu.screener_backend.binance.dt.TradeList;
+import dev.abu.screener_backend.binance.entities.DepthEvent;
 import dev.abu.screener_backend.websockets.EventDistributor;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +22,6 @@ public class OrderBook {
 
     private final ObjectMapper mapper;
     private final EventDistributor eventDistributor;
-    private final String websocketName;
     private final boolean isSpot;
     private boolean isInitialEvent = false;
 
@@ -38,13 +40,11 @@ public class OrderBook {
     public OrderBook(
             String mSymbol,
             boolean isSpot,
-            String websocketName,
             ObjectMapper mapper,
             EventDistributor eventDistributor
     ) {
         this.mSymbol = mSymbol;
         this.isSpot = isSpot;
-        this.websocketName = websocketName;
         this.mapper = mapper;
         this.eventDistributor = eventDistributor;
         this.generalTradeList = new GeneralTradeList();
@@ -55,75 +55,75 @@ public class OrderBook {
         return !isTaskScheduled && isReSync;
     }
 
-    public void process(DepthUpdate depthUpdate) {
+    public void process(DepthEvent depthEvent) {
         // if re-sync is needed and there is no task that is queued for concurrent run,
         // then process this event concurrently to get the initial snapshot
         if (isScheduleNeeded()) {
-            processEventConcurrently(depthUpdate);
+            processEventConcurrently(depthEvent);
         }
 
         // if initial snapshot has already been processed (in which case no task is scheduled for concurrent run),
         // then process the events as usual
         else if (!isTaskScheduled) {
-            processEvent(depthUpdate);
+            processEvent(depthEvent);
         }
 
         // in any other case, events will be ignored, so they should be kept in the buffer.
     }
 
-    private void processEventConcurrently(DepthUpdate depthUpdate) {
+    private void processEventConcurrently(DepthEvent depthEvent) {
         isTaskScheduled = true;
         AsyncOBScheduler.scheduleTask(() -> {
-            startProcessing(depthUpdate);
+            startProcessing(depthEvent);
             isTaskScheduled = false;
         }, isSpot);
     }
 
-    private void startProcessing(DepthUpdate depthUpdate) {
-        long U = depthUpdate.getFirstUpdateId();
-        long u = depthUpdate.getFinalUpdateId();
+    private void startProcessing(DepthEvent depthEvent) {
+        long U = depthEvent.getFirstUpdateId();
+        long u = depthEvent.getFinalUpdateId();
         processInitialSnapshot(U);
-        processInitialEvent(depthUpdate, U, u);
+        processInitialEvent(depthEvent, U, u);
     }
 
-    private void processEvent(DepthUpdate depthUpdate) {
-        long U = depthUpdate.getFirstUpdateId();
-        long u = depthUpdate.getFinalUpdateId();
+    private void processEvent(DepthEvent depthEvent) {
+        long U = depthEvent.getFirstUpdateId();
+        long u = depthEvent.getFinalUpdateId();
 
         if (isInitialEvent) {
-            processInitialEvent(depthUpdate, U, u);
+            processInitialEvent(depthEvent, U, u);
         } else if (isSpot) {
-            processSpotEvent(depthUpdate, U, u);
+            processSpotEvent(depthEvent, U, u);
         } else {
-            processFutEvent(depthUpdate, u);
+            processFutEvent(depthEvent, u);
         }
     }
 
-    private void processInitialEvent(DepthUpdate depthUpdate, long U, long u) {
+    private void processInitialEvent(DepthEvent depthEvent, long U, long u) {
         if (lastUpdateId >= U && lastUpdateId <= u) {
             lastUpdateId = u;
-            analyzeData(depthUpdate, false);
+            analyzeData(depthEvent, false);
             isInitialEvent = false;
-            incrementReSyncCount(websocketName, mSymbol);
+            incrementReSyncCount(isSpot, mSymbol);
         } else if (U > lastUpdateId) {
             startReSync();
         }
     }
 
-    private void processSpotEvent(DepthUpdate depthUpdate, long U, long u) {
+    private void processSpotEvent(DepthEvent depthEvent, long U, long u) {
         if (lastUpdateId + 1 >= U && lastUpdateId < u) {
             lastUpdateId = u;
-            analyzeData(depthUpdate, false);
+            analyzeData(depthEvent, false);
         } else {
             startReSync();
         }
     }
 
-    private void processFutEvent(DepthUpdate depthUpdate, long u) {
-        long pu = depthUpdate.getLastUpdateId();
+    private void processFutEvent(DepthEvent depthEvent, long u) {
+        long pu = depthEvent.getLastUpdateId();
         if (lastUpdateId == pu) {
             lastUpdateId = u;
-            analyzeData(depthUpdate, false);
+            analyzeData(depthEvent, false);
         } else {
             startReSync();
         }
@@ -131,7 +131,7 @@ public class OrderBook {
 
     private void startReSync() {
         isReSync = true;
-        decrementReSyncCount(websocketName, mSymbol);
+        decrementReSyncCount(isSpot, mSymbol);
         generalTradeList.clear();
     }
 
@@ -140,11 +140,11 @@ public class OrderBook {
 
         try {
             lastUpdateId = 0;
-            DepthUpdate snapshot;
+            DepthEvent snapshot;
 
             do {
                 raw = getInitialSnapshot(mSymbol.replace(FUT_SIGN, ""), isSpot);
-                snapshot = mapper.readValue(raw, DepthUpdate.class);
+                snapshot = mapper.readValue(raw, DepthEvent.class);
                 lastUpdateId = snapshot.getLastUpdateId();
             } while (lastUpdateId < U);
 
@@ -153,13 +153,13 @@ public class OrderBook {
             isInitialEvent = true;
 
         } catch (Exception e) {
-            log.error("{} Error processing snapshot: {} - {}", websocketName, raw, e.getMessage());
+            log.error("Error processing snapshot: {} - {}", raw, e.getMessage());
             isReSync = true;
         }
     }
 
-    private synchronized void analyzeData(DepthUpdate depthUpdate, boolean initialSnapshot) {
-        generalTradeList.process(depthUpdate.getBids(), depthUpdate.getAsks(), initialSnapshot);
+    private synchronized void analyzeData(DepthEvent depthEvent, boolean initialSnapshot) {
+        generalTradeList.process(depthEvent.getBids(), depthEvent.getAsks(), initialSnapshot);
         tls.forEach(tl -> {
             tl.process(generalTradeList);
             eventDistributor.distribute(tl.getSettings().getSettingsHash(), tl.getMaxLevel(), tl.toDTO());

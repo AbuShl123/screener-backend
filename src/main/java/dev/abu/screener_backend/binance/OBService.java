@@ -1,8 +1,7 @@
 package dev.abu.screener_backend.binance;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.abu.screener_backend.analysis.OrderBook;
-import dev.abu.screener_backend.analysis.TradeList;
+import dev.abu.screener_backend.binance.dt.TradeList;
 import dev.abu.screener_backend.settings.Settings;
 import dev.abu.screener_backend.settings.SettingsRepository;
 import dev.abu.screener_backend.websockets.EventDistributor;
@@ -23,7 +22,7 @@ import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
 @Slf4j
 @RequiredArgsConstructor
 public class OBService {
-    private static final Map<String, Set<String>> reSyncCountMap = new ConcurrentHashMap<>();
+    private static final Map<Boolean, Set<String>> reSyncCountMap = new ConcurrentHashMap<>();
 
     @Getter
     private final Map<String, OrderBook> orderBooks = new ConcurrentHashMap<>();
@@ -39,18 +38,16 @@ public class OBService {
     @PostConstruct
     public void init() {
         allSymbolDefSettings = settingsRepository.findDefaultSettingsForAllSymbols().orElse(null);
+        reSyncCountMap.put(true, ConcurrentHashMap.newKeySet());
+        reSyncCountMap.put(false, ConcurrentHashMap.newKeySet());
     }
 
-    public static void incrementReSyncCount(String websocketName, String symbol) {
-        reSyncCountMap.get(websocketName).add(symbol);
+    public static void incrementReSyncCount(boolean isSpot, String symbol) {
+        reSyncCountMap.get(isSpot).add(symbol);
     }
 
-    public static void decrementReSyncCount(String websocketName, String symbol) {
-        reSyncCountMap.get(websocketName).remove(symbol);
-    }
-
-    public static void prepareReSyncMap(String websocketName) {
-        reSyncCountMap.computeIfAbsent(websocketName, k -> ConcurrentHashMap.newKeySet());
+    public static void decrementReSyncCount(boolean isSpot, String symbol) {
+        reSyncCountMap.get(isSpot).remove(symbol);
     }
 
     public static void printReSyncMap() {
@@ -67,10 +64,10 @@ public class OBService {
         return orderBooks.get(marketSymbol);
     }
 
-    public void prepareOrderBooks(Collection<String> symbols, boolean isSpot, String wsName) {
+    public void prepareOrderBooks(Collection<String> symbols, boolean isSpot) {
         for (String symbol : symbols) {
             String mSymbol = isSpot ? symbol : symbol + FUT_SIGN;
-            var orderbook = new OrderBook(mSymbol, isSpot, wsName, mapper, eventDistributor);
+            var orderbook = new OrderBook(mSymbol, isSpot, mapper, eventDistributor);
             orderBooks.putIfAbsent(mSymbol, orderbook);
             addDefaultTL(orderbook);
         }
@@ -157,11 +154,8 @@ public class OBService {
     }
 
     public void truncateOrderBooks() {
-        long start = System.nanoTime();
         for (OrderBook orderBook : orderBooks.values()) {
             orderBook.getGeneralTradeList().truncateOrderBook();
         }
-        long duration = (System.nanoTime() - start) / 1_000_000;
-        log.info("Truncated all the order books in {}ms", duration);
     }
 }

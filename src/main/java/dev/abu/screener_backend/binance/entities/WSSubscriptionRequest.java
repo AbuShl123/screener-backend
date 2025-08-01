@@ -1,4 +1,4 @@
-package dev.abu.screener_backend.binance.depth;
+package dev.abu.screener_backend.binance.entities;
 
 import java.util.Collection;
 

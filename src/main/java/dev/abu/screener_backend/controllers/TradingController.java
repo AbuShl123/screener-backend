@@ -1,12 +1,11 @@
 package dev.abu.screener_backend.controllers;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.abu.screener_backend.annotations.SubscribedOnly;
 import dev.abu.screener_backend.appuser.AppUser;
 import dev.abu.screener_backend.binance.BinanceService;
 import dev.abu.screener_backend.binance.BitgetOpenInterestService;
-import dev.abu.screener_backend.binance.Ticker;
+import dev.abu.screener_backend.binance.entities.Ticker;
 import dev.abu.screener_backend.binance.TickerService;
 import dev.abu.screener_backend.settings.SettingsRequestDTO;
 import dev.abu.screener_backend.settings.SettingsService;
@@ -35,6 +34,7 @@ public class TradingController {
     private final BinanceService binanceService;
     private final SettingsService settingsService;
 
+
     @GetMapping("/tickers")
     public List<Ticker> allTickers() {
         return tickerService.getAllTickers();
@@ -47,12 +47,23 @@ public class TradingController {
                 .body(oiService.getHistoricalOI());
     }
 
-    @GetMapping("/kilnes/5m-volume/{mSymbol}")
-    public ResponseEntity<String> get5MVolumeData(
-            @PathVariable String mSymbol
+    @GetMapping("/ticker-price-change")
+    public ResponseEntity<List<ObjectNode>> getTickerPriceChange() {
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(tickerService.getHistory());
+    }
+
+    // **************** KLINE *********************
+
+    @GetMapping("/kilnes")
+    public ResponseEntity<String> getKlines(
+            @RequestParam String mSymbol,
+            @RequestParam String interval,
+            @RequestParam String limit
     ) {
         try {
-            String jsonResponse = binanceService.get5MVolumeData(mSymbol);
+            String jsonResponse = binanceService.getKlinesData(mSymbol, interval, limit);
 
             if (jsonResponse == null) {
                 return ResponseEntity
@@ -71,11 +82,16 @@ public class TradingController {
         }
     }
 
-    @GetMapping("/ticker-price-change")
-    public ResponseEntity<List<ObjectNode>> getTickerPriceChange() {
+    @GetMapping("/kilnes/5m-volume/{mSymbol}")
+    public ResponseEntity<String> get5MVolumeData(@PathVariable String mSymbol) {
+        return getKlines(mSymbol, "5m", "1");
+    }
+
+    @GetMapping("/klines/gvolume")
+    public ResponseEntity<String> getGVolume() {
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(tickerService.getHistory());
+                .body(binanceService.getGVolume());
     }
 
     // **************** ORDER BOOK ****************
@@ -87,13 +103,6 @@ public class TradingController {
     ) throws Exception {
         response.setContentType("application/json");
         binanceService.depthSnapshot(response, mSymbol);
-    }
-
-    @GetMapping("/orderbook/top/{mSymbol}")
-    public ResponseEntity<JsonNode> geOrderBookTop(
-            @PathVariable String mSymbol
-    ) {
-        return ResponseEntity.ok(binanceService.topOrderBook(mSymbol));
     }
 
     // **************** SETTINGS ****************
