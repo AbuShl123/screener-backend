@@ -48,7 +48,7 @@ public class BinanceService {
         tickerService.updateTickers();
 
         Collection<String> spotSymbols = tickerService.getSpotSymbols();
-        Collection<String> futSymbols = tickerService.getFutSymbols().stream().toList().subList(0, 50);
+        Collection<String> futSymbols = tickerService.getFutSymbols();
 
         klineEventConsumer.fetchHistoricalData(spotSymbols, true);
         klineEventConsumer.fetchHistoricalData(futSymbols, false);
