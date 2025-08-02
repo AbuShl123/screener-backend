@@ -26,6 +26,6 @@ public class KlineData implements Comparable<KlineData> {
 
     @Override
     public int compareTo(KlineData o) {
-        return Long.compare(startTime, o.startTime);
+        return Long.compare(closeTime, o.closeTime);
     }
 }

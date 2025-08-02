@@ -14,6 +14,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -135,10 +137,7 @@ public class KlineEventConsumer {
                 }
             }
 
-            // cleaning up very old data to prevent memory leaks
-            long cutoffTime = closeTime - (4 * twoHoursMillis);
-            symbolHistory.headMap(cutoffTime, false).clear();
-
+            removeOldData(symbolHistory, mSymbol, closeTime);
         } catch (Exception e) {
             log.error("Error processing KlineEvent for symbol {}: {}", klineEvent.getSymbol(), e.getMessage(), e);
         }
@@ -188,6 +187,15 @@ public class KlineEventConsumer {
             klinesSet.remove(klineData);
             klinesSet.add(klineData);
         }
+    }
+
+    private void removeOldData(NavigableMap<Long, Double> symbolHistory, String mSymbol, long closeTime) {
+        long cutoffTime = closeTime - Duration.ofHours(8).toMillis();
+        symbolHistory.headMap(cutoffTime, false).clear();
+
+        KlineData dummy = new KlineData();
+        dummy.setCloseTime(cutoffTime);
+        klines.get(mSymbol).headSet(dummy, false).clear();
     }
 
     private TreeSet<KlineData> getKlines(String mSymbol) {
