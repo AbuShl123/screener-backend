@@ -128,10 +128,7 @@ public class KlineEventConsumer {
                 double pastVolume = pastEntry.getValue();
                 if (pastVolume > 0) {
                     double diffPercent = ((currentVolume - pastVolume) / pastVolume) * 100.0;
-                    boolean hasUpdated = gVolume.add(mSymbol, diffPercent);
-                    if (hasUpdated) {
-                        log.info("{}", gVolume);
-                    }
+                    gVolume.add(mSymbol, diffPercent);
                 } else {
                     log.warn("Past volume was zero for mSymbol: {}", mSymbol);
                 }
@@ -202,7 +199,13 @@ public class KlineEventConsumer {
         return klines.computeIfAbsent(mSymbol, s -> new TreeSet<>());
     }
 
+    public String getCandles(String mSymbol) throws Exception {
+        var candles = new TreeSet<>(getKlines(mSymbol));
+        return objectMapper.writeValueAsString(candles);
+    }
+
     private NavigableMap<Long, Double> getVolumeHistory(String mSymbol) {
         return volumeHistory.computeIfAbsent(mSymbol, s -> new ConcurrentSkipListMap<>());
     }
+
 }

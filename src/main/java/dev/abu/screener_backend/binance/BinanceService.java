@@ -2,8 +2,9 @@ package dev.abu.screener_backend.binance;
 
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonGenerator;
-import dev.abu.screener_backend.binance.ws.BinanceWebSocket;
+import dev.abu.screener_backend.binance.entities.KlineData;
 import dev.abu.screener_backend.binance.entities.KlineInterval;
+import dev.abu.screener_backend.binance.ws.BinanceWebSocket;
 import dev.abu.screener_backend.binance.ws.KlineEventConsumer;
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpServletResponse;
@@ -16,6 +17,7 @@ import java.io.OutputStream;
 import java.util.Collection;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 import static dev.abu.screener_backend.binance.OBService.printReSyncMap;
 import static dev.abu.screener_backend.utils.EnvParams.FUT_SIGN;
@@ -41,10 +43,14 @@ public class BinanceService {
         tickerService.syncTickerPrices();
     }
 
+    @Scheduled(initialDelay = 10 * 60_000, fixedDelay = 3 * 60_000)
+    public void truncateOrderBooks() {
+        obService.truncateOrderBooks();
+    }
+
     @Scheduled(fixedDelay = 15 * 60_000)
     public void tickersUpdate() {
         if (obService.getAllSymbolDefSettings() == null) return;
-        obService.truncateOrderBooks();
         tickerService.updateTickers();
 
         Collection<String> spotSymbols = tickerService.getSpotSymbols();
@@ -68,6 +74,10 @@ public class BinanceService {
 
     public String getGVolume() {
         return klineEventConsumer.getGVolumeJsonData();
+    }
+
+    public String getCandles(String mSymbol) throws Exception {
+        return klineEventConsumer.getCandles(mSymbol);
     }
 
     public void depthSnapshot(HttpServletResponse response, String mSymbol) throws Exception {

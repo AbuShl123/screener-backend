@@ -34,7 +34,6 @@ public class TradingController {
     private final BinanceService binanceService;
     private final SettingsService settingsService;
 
-
     @GetMapping("/tickers")
     public List<Ticker> allTickers() {
         return tickerService.getAllTickers();
@@ -92,6 +91,13 @@ public class TradingController {
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(binanceService.getGVolume());
+    }
+
+    @GetMapping("/klines/candles/{mSymbol}")
+    public ResponseEntity<String> getCandlesticks(@PathVariable String mSymbol) throws Exception {
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(binanceService.getCandles(mSymbol));
     }
 
     // **************** ORDER BOOK ****************
