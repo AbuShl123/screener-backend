@@ -145,7 +145,7 @@ public class KlineEventConsumer {
             log.info("Starting to send kline data");
             sendUpdate();
             isScheduled.set(false);
-        }, 5, TimeUnit.SECONDS);
+        }, 2, TimeUnit.SECONDS);
     }
 
     private void sendUpdate() {
